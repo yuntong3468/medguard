@@ -210,8 +210,20 @@
   .abtn{font-size:12px;padding:8px 14px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--grey);cursor:pointer}
   .abtn:hover{border-color:var(--teal);color:var(--teal)}
   .abody{max-width:900px;margin:0 auto;padding:34px 24px 60px}
+  .tabs{display:flex;gap:8px;margin-bottom:12px}
+  .tab{padding:7px 15px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--grey);font-size:12px;cursor:pointer}
+  .tab.on{background:var(--teal);border-color:var(--teal);color:#fff;font-weight:600}
+  .rxt{width:100%;border-collapse:collapse;margin-top:4px}
+  .rxt th{font-size:10.5px;color:var(--lgrey);font-weight:400;text-align:left;padding:5px 6px;border-bottom:1px solid #EEF2F3}
+  .rxt td{font-size:11px;color:var(--ink);padding:7px 6px;border-bottom:1px dashed #EEF2F3;line-height:1.6;vertical-align:top}
+  .rxt td.dn{font-weight:600;color:var(--navy);width:132px}
+  .rxt td.sp{width:64px;color:var(--grey)}
+  .rxt td.nt{color:var(--lgrey);font-size:10.5px;width:150px}
+  .tcmbox{border-left:3px solid #C9A227;background:#FDFAF0;border-radius:0 9px 9px 0;padding:11px 13px;font-size:11.5px;line-height:1.85}
+  .tcmbox b{color:#8A6D1B}
+  .tcmwarn{margin-top:9px;background:#FDF2F0;border:1px solid #F5DED9;border-radius:8px;padding:8px 11px;font-size:10.8px;color:#8E2D23;line-height:1.7}
   /* ---------- archive ---------- */
-  .arow{display:grid;grid-template-columns:110px 64px 1fr 84px 18px;gap:10px;align-items:center;
+  .arow{display:grid;grid-template-columns:104px 44px 54px 1fr 80px 16px;gap:10px;align-items:center;
     background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 14px;margin-top:8px;cursor:pointer}
   .arow:hover{border-color:#BFDDE0;background:#FBFEFD}
   .arow .an{font-size:12.5px;font-weight:600;color:var(--navy);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -226,7 +238,7 @@
   .arcbar input:focus{outline:none;border-color:var(--teal)}
   .arcbar .cnt{font-size:11.5px;color:var(--lgrey)}
   .arcbar .sp{flex:1}
-  .archead{display:grid;grid-template-columns:110px 64px 1fr 84px 18px;gap:10px;padding:0 14px;margin-top:22px;
+  .archead{display:grid;grid-template-columns:104px 44px 54px 1fr 80px 16px;gap:10px;padding:0 14px;margin-top:22px;
     font-size:10.5px;color:var(--lgrey);letter-spacing:.5px}
   #arcModal .box{width:580px;max-height:82vh;overflow-y:auto}
   #arcModal .kv{display:flex;font-size:12px;line-height:1.9;border-bottom:1px dashed #EEF2F3;padding:5px 0}
@@ -469,7 +481,7 @@
             <button class="topbar-ish" onclick="clearArchive()"
               style="font-size:11.5px;padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:#6B7B83;cursor:pointer">清空存档</button>
           </div>
-          <div class="archead"><span>姓名</span><span>年龄</span><span>疾病</span><span>状态</span><span></span></div>
+          <div class="archead"><span>姓名</span><span>性别</span><span>年龄</span><span>疾病</span><span>状态</span><span></span></div>
           <div id="arcList"></div>
         </div>
   </div>
@@ -617,7 +629,7 @@ function reply(r, first) {
   var t = r.differential.length ? r.differential[0] : null;
   html += '<br><br>';
   if (t && t.score >= 25) {
-    html += '首要鉴别：<b>' + t.name + '</b>（' + t.score + '），分诊建议 <b>' + r.triage.level + '</b>。';
+    html += '首要鉴别：<b>' + t.name + '</b>（' + t.score + '），分诊建议 <b>' + r.triage.level + (r.dept ? ' · ' + r.dept : '') + '</b>。';
   } else {
     html += '现有信息还不足以下判断。';
   }
@@ -706,6 +718,45 @@ function updateReady(r) {
 }
 
 /* ---------------- 报告 ---------------- */
+
+
+
+function copyTextSafe(txt) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(txt); return true; }
+  } catch (e) {}
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = txt; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta); return true;
+  } catch (e) { return false; }
+}
+
+function copyRx() {
+  var r = CASE.result;
+  if (!r || !r.rx || !r.rx.length) return;
+  var lines = r.rx.map(function (x, i) {
+    return (i + 1) + '. ' + x.d + ' ' + x.s + '　' + x.u + '　疗程：' + x.c + (x.tag ? '（按画像调整）' : '');
+  });
+  var txt = '处方\n患者：' + (CASE.arcName || '　') + '　' + ((r.vitals && r.vitals.age) ? r.vitals.age + '岁' : '') +
+    '\n诊断：' + ((r.differential[0] && r.differential[0].name) || '') +
+    '\n\n' + lines.join('\n') +
+    '\n\n医师：________　日期：' + new Date().toLocaleDateString('zh-CN');
+  copyTextSafe(txt);
+  arcTip('处方已复制', true);
+}
+
+function switchTx(mode) {
+  var w = $('txWest'), t = $('txTcm');
+  if (!w || !t) return;
+  var west = mode === 'west';
+  w.style.display = west ? 'block' : 'none';
+  t.style.display = west ? 'none' : 'block';
+  var bw = $('tabWest'), bt = $('tabTcm');
+  if (bw) bw.classList.toggle('on', west);
+  if (bt) bt.classList.toggle('on', !west);
+}
+
 function renderReport() {
   var r = CASE.result;
   if (!r) return;
@@ -758,34 +809,72 @@ function renderReport() {
 
   h += '</div>'; /* grid2 */
 
-  /* 个性化治疗 */
+  /* 个性化治疗（西医 / 中医 双方案） */
   var tr = r.treatment || { recs: [], avoids: [], monitor: [], flags: [], blocked: [] };
-  h += '<div class="card" style="margin-top:16px"><div class="ch"><h3>个性化治疗</h3><span class="tag">按患者画像调整，不是按病种一刀切</span></div><div class="cb">';
+  var rx = r.rx || [];
+  var tcm = r.tcm || {};
+
+  h += '<div class="card" style="margin-top:16px"><div class="ch"><h3>治疗方案</h3>' +
+    '<span class="tag">同一诊断，按患者画像调整</span></div><div class="cb">';
+
+  h += '<div class="tabs">' +
+    '<button class="tab on" id="tabWest" onclick="switchTx(\'west\')">西医方案</button>' +
+    '<button class="tab" id="tabTcm" onclick="switchTx(\'tcm\')">中医方案</button></div>';
+
+  /* ---- 西医 ---- */
+  h += '<div id="txWest">';
   if (tr.flags && tr.flags.length) {
     h += '<div class="chips" style="margin-bottom:11px">' +
       tr.flags.map(function (f) { return '<span class="chip">' + f + '</span>'; }).join('') + '</div>';
   }
-  if (tr.recs.length) {
-    h += '<ul class="li">' + tr.recs.map(function (x) {
-      return '<li><b>' + x.drug + '</b>' + (x.why ? '　—　' + x.why : '') + '</li>';
-    }).join('') + '</ul>';
+
+  if (rx.length) {
+    h += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">' +
+      '<span style="font-size:10.5px;color:#9AA8AE">处方建议</span>' +
+      '<button onclick="copyRx()" style="font-size:10.5px;padding:3px 9px;border:1px solid #DCE6E9;border-radius:6px;background:#fff;color:#117A8B;cursor:pointer">复制处方</button></div>';
+    h += '<table class="rxt"><tr><th>药品</th><th>规格</th><th>用法</th><th>疗程</th><th>注意</th></tr>';
+    rx.forEach(function (x) {
+      h += '<tr><td class="dn">' + esc(x.d) + (x.tag ? '<br><span style="font-weight:400;font-size:9.5px;color:#117A8B">按画像调整·' + x.tag + '</span>' : '') + '</td>' +
+        '<td class="sp">' + esc(x.s) + '</td><td>' + esc(x.u) + '</td><td class="sp">' + esc(x.c) + '</td>' +
+        '<td class="nt">' + esc(x.n) + '</td></tr>';
+    });
+    h += '</table>';
   } else {
-    h += '<div style="font-size:11.5px;color:#9AA8AE">信息不足，请先明确诊断后再制定方案。</div>';
+    h += '<div style="font-size:11.5px;color:#9AA8AE">该病种暂无标准处方模板，请按临床路径处理。</div>';
+  }
+
+  if (tr.recs.length) {
+    h += '<div style="margin-top:13px"><div style="font-size:10.5px;color:#9AA8AE;margin-bottom:5px">方案要点</div><ul class="li">' +
+      tr.recs.map(function (x) { return '<li><b>' + esc(x.drug) + '</b>' + (x.why ? '　—　' + x.why : '') + '</li>'; }).join('') + '</ul></div>';
   }
   if (tr.blocked && tr.blocked.length) {
     h += '<div style="margin-top:10px;font-size:11px;color:#8A5A12;line-height:1.7">' +
-      tr.blocked.map(function (b) { return '⚠ 常规方案中的 <b>' + b.drug + '</b> 与当前画像冲突，已从推荐中剔除，改用下列替代方案。'; }).join('<br>') + '</div>';
+      tr.blocked.map(function (b) { return '⚠ 常规方案中的 <b>' + esc(b.drug) + '</b> 与当前画像冲突，已从推荐中剔除。'; }).join('<br>') + '</div>';
   }
   if (tr.avoids.length) {
     h += '<div style="margin-top:10px;background:#FDF2F0;border:1px solid #F5DED9;border-radius:9px;padding:10px 12px">' +
       tr.avoids.map(function (a) {
-        return '<div style="font-size:11px;color:#8E2D23;line-height:1.7">✕ <b>' + a.drug + '</b>（' + a.when + '）：' + a.why + '</div>';
+        return '<div style="font-size:11px;color:#8E2D23;line-height:1.7">✕ <b>' + esc(a.drug) + '</b>（' + esc(a.when) + '）：' + esc(a.why) + '</div>';
       }).join('') + '</div>';
   }
   if (tr.monitor.length) {
     h += '<div style="margin-top:11px"><div style="font-size:10.5px;color:#9AA8AE;margin-bottom:5px">监测计划</div><ul class="li">' +
-      tr.monitor.map(function (m) { return '<li>' + m + '</li>'; }).join('') + '</ul></div>';
+      tr.monitor.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul></div>';
   }
+  h += '</div>';
+
+  /* ---- 中医 ---- */
+  h += '<div id="txTcm" style="display:none">';
+  h += '<div class="tcmbox">' +
+    '<div><b>辨证：</b>' + esc(tcm.pat || '—') + '</div>' +
+    '<div style="margin-top:5px"><b>代表方：</b>' + esc(tcm.fang || '—') + '</div>' +
+    (tcm.yao && tcm.yao.length ? '<div style="margin-top:5px"><b>方药组成：</b>' + tcm.yao.join('、') + '</div>' +
+      '<div style="margin-top:3px;color:#8A6D1B">水煎服，日一剂，早晚分服；随证加减</div>' : '') +
+    '<div style="margin-top:5px"><b>外治/调护：</b>' + esc(tcm.ext || '—') + '</div></div>';
+  h += '<div class="tcmwarn">⚠ ' + esc(tcm.warn || '本模块仅供参考，需中医师面诊辨证；不得以中药替代必要的西医处置。') + '</div>';
+  h += '<div style="margin-top:10px;font-size:10.5px;color:#9AA8AE;line-height:1.7">中药需辨证加减，剂量与煎法由中医师确定；正在服用西药者需评估相互作用。</div>';
+  h += '</div>';
+
   h += '</div></div>';
 
   /* 健康管理 */
@@ -853,7 +942,10 @@ function scoreColor(s) { return s >= 65 ? '#B83A2E' : s >= 45 ? '#D9841B' : s >=
 function genRecord() {
   var r = CASE.result; if (!r) return;
   var v = r.vitals, top = r.differential[0] || { name: '待明确', workup: [], tx: [], fu: '—' };
-  var txt = '门诊病历（AI 辅助生成，需医师审核签署）\n\n' +
+  var rxLines = (r.rx || []).map(function (x, i) {
+    return (i + 1) + '. ' + x.d + ' ' + x.s + '　' + x.u + '　疗程：' + x.c;
+  }).join('\n');
+  var txt = '门诊病历\n\n' +
     '主诉：' + r.symptoms.slice(0, 3).join('、') + (v.duration ? '，' + v.duration : '') + '\n' +
     '现病史：患者' + (v.sex || '') + (v.age ? '，' + v.age + '岁' : '') + '，因' + (r.symptoms.slice(0, 3).join('、') || '不适') + '就诊。' +
     (v.temp ? '体温 ' + v.temp + '℃。' : '') + (v.sbp ? '血压 ' + v.sbp + '/' + v.dbp + 'mmHg。' : '') + '\n' +
@@ -864,7 +956,9 @@ function genRecord() {
     '初步诊断：' + top.name + (r.differential[1] ? '（鉴别：' + r.differential.slice(1, 3).map(function (d) { return d.name; }).join('、') + '）' : '') + '\n' +
     '处理意见：' + top.tx.join('；') + '\n' +
     '处置去向：' + r.triage.level + '（' + r.triage.reason + '）\n' +
-    '随访：' + top.fu;
+    '随访：' + top.fu +
+    (rxLines ? '\n\n处方：\n' + rxLines : '') +
+    '\n\n医师签名：________　　日期：' + new Date().toLocaleDateString('zh-CN');
   showOut('门诊病历', txt);
 }
 
@@ -1058,6 +1152,7 @@ function saveArc() {
     dx: top.name || '待明确',
     status: status,
     triage: t.level,
+    dept: r.dept || (top.dept || ''),
     ts: new Date().toISOString(),
     v: {
       symptoms: (r.symptoms || []).slice(0, 8),
@@ -1107,6 +1202,7 @@ function renderArchive() {
     var cls = x.status === '已治疗' ? 'done' : 'todo';
     return '<div class="arow" onclick="openArc(\'' + x.id + '\')">' +
       '<span class="an">' + esc(x.name) + '</span>' +
+      '<span class="aa">' + (x.sex || '—') + '</span>' +
       '<span class="aa">' + (x.age ? x.age + '岁' : '—') + '</span>' +
       '<span class="ad">' + esc(x.dx) + '</span>' +
       '<span class="as ' + cls + '">' + x.status + '</span>' +
@@ -1262,6 +1358,7 @@ function paintArc(all) {
     var cls = x.status === '已治疗' ? 'done' : 'todo';
     return '<div class="arow" onclick="openArc(\'' + x.id + '\')">' +
       '<span class="an">' + esc(x.name) + '</span>' +
+      '<span class="aa">' + (x.sex || '—') + '</span>' +
       '<span class="aa">' + (x.age ? x.age + '岁' : '—') + '</span>' +
       '<span class="ad">' + esc(x.dx) + '</span>' +
       '<span class="as ' + cls + '">' + x.status + '</span>' +
@@ -1292,6 +1389,7 @@ function saveArc() {
     dx: top.name || '待明确',
     status: status,
     triage: t.level,
+    dept: r.dept || (top.dept || ''),
     ts: new Date().toISOString(),
     v: {
       symptoms: (r.symptoms || []).slice(0, 8),
@@ -1347,7 +1445,7 @@ function openArc(id) {
   var v = x.v || {}, vt = v.vitals || {};
   var h = '<h3>' + esc(x.name) + '　<span style="font-size:11.5px;color:#9AA8AE;font-weight:400">' +
     (x.age ? x.age + '岁' : '') + (x.sex ? ' · ' + x.sex : '') + '　' + new Date(x.ts).toLocaleString('zh-CN') + '</span></h3>';
-  h += '<div class="kv"><b>疾病</b><span>' + esc(x.dx) + '　（分诊：' + esc(x.triage || '-') + '）</span></div>';
+  h += '<div class="kv"><b>疾病</b><span>' + esc(x.dx) + '　（分诊：' + esc(x.triage || '-') + (x.dept ? ' · ' + esc(x.dept) : '') + '）</span></div>';
   h += '<div class="kv"><b>状态</b><span>' + x.status + '</span></div>';
   h += '<div class="kv"><b>症状</b><span>' + (v.symptoms && v.symptoms.length ? v.symptoms.join('、') : '—') + '</span></div>';
   if (v.risks && v.risks.length) h += '<div class="kv"><b>危险因素</b><span>' + v.risks.join('、') + '</span></div>';
