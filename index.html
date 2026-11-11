@@ -553,7 +553,12 @@
     </div>
 
     <label>模型名</label>
-    <input id="cfgModel" placeholder="deepseek-chat">
+    <div style="display:flex;gap:8px">
+      <input id="cfgModel" list="cfgModels" placeholder="deepseek-chat" style="flex:1">
+      <button onclick="fetchModels()" style="padding:0 12px;border:1px solid #DCE6E9;border-radius:8px;background:#fff;color:#117A8B;font-size:11.5px;cursor:pointer;white-space:nowrap">拉取模型</button>
+    </div>
+    <datalist id="cfgModels"></datalist>
+    <div style="font-size:10px;color:#9AA8AE;margin-top:4px">不知道写什么就点「拉取模型」；也可以在服务商控制台的模型列表里复制。</div>
 
     <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
       <button onclick="testLLM()" style="padding:8px 14px;border:1px solid #DCE6E9;border-radius:8px;background:#fff;color:#117A8B;font-size:12px;cursor:pointer">测试连接</button>
@@ -674,7 +679,35 @@ function paint() {
   box.scrollTop = box.scrollHeight;
 }
 
-function reply(r, first) {
+
+async function reply(r, first) {
+  if (!hasModel()) { replyLocal(r, first); return; }
+
+  var top = r.differential[0] || {};
+  var pending = (r.questions || []);
+  var sys = '你是一名基层全科门诊助手，正在与医生对话。规则引擎已经完成结构化判定，你的任务是：' +
+    '①先用一句话确认你记录到的信息；②如果还有待确认项，用口语问 1-2 个问题；③信息足够时简短说明可以出报告。' +
+    '硬性要求：不得给出与「引擎鉴别」冲突的诊断；不得开处方；不要输出列表或 Markdown；总长度不超过 120 字；语气简洁专业。' +
+    '\n\n当前病例事实：\n- 症状：' + (r.symptoms.join('、') || '未识别') +
+    '\n- 危险因素：' + (r.risks.join('、') || '无') +
+    '\n- 生命体征：' + [r.vitals && r.vitals.temp ? 'T' + r.vitals.temp : '', r.vitals && r.vitals.sbp ? 'BP' + r.vitals.sbp + '/' + r.vitals.dbp : '',
+      r.vitals && r.vitals.spo2 ? 'SpO2 ' + r.vitals.spo2 + '%' : '', r.vitals && r.vitals.duration ? '病程' + r.vitals.duration : ''].filter(Boolean).join('，') +
+    '\n- 引擎鉴别（前 3）：' + r.differential.slice(0, 3).map(function (d) { return d.name + '(' + d.score + ')'; }).join('、') +
+    '\n- 分诊建议：' + r.triage.level + (r.dept ? ' · ' + r.dept : '') +
+    '\n- 红旗：' + (r.redflags.length ? r.redflags.map(function (x) { return x.name; }).join('、') : '无') +
+    '\n- 待确认问题：' + (pending.length ? pending.join(' / ') : '无（信息已足够）');
+
+  var hist = (CASE.msgs || []).filter(function (m) { return m.role === 'me'; }).slice(-4)
+    .map(function (m) { return { role: 'user', content: String(m.html).replace(/<[^>]+>/g, '') }; });
+
+  var messages = [{ role: 'system', content: sys }].concat(hist);
+
+  var modelText = null;
+  try { modelText = await chatComplete(messages); } catch (e) { modelText = null; }
+  replyLocal(r, first, modelText);
+}
+
+function replyLocal(r, first, modelText) {
   var html = '';
 
   if (r.addon) {
@@ -715,6 +748,12 @@ function reply(r, first) {
 
   if (r.warnings && r.warnings.length) {
     html += '<br><br><span style="color:#8A5A12">⚠ ' + r.warnings[0] + '</span>';
+  }
+
+  if (modelText) {
+    html = '<div style="font-size:12.5px;line-height:1.9">' + esc(modelText).replace(/\n/g, '<br>') + '</div>' +
+      '<div style="margin-top:10px;padding-top:9px;border-top:1px dashed #E4EBED;font-size:11px;line-height:1.8;color:#6B7B83">' + html + '</div>' +
+      '<div style="margin-top:7px;font-size:9.5px;color:#9AA8AE">由你配置的模型生成 · 结构化判定仍来自本地引擎</div>';
   }
   pushAg(html);
 }
@@ -901,6 +940,35 @@ async function callLLM(url, key, model, text) {
   }
 }
 
+
+async function fetchModels() {
+  var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+  var el = $('cfgTest');
+  if (!url || !key) { el.style.color = '#B83A2E'; el.textContent = '先填接口地址和 Key'; return; }
+  el.style.color = '#6B7B83';
+  el.textContent = '拉取模型列表…';
+  try {
+    var ctl = new AbortController();
+    var tm = setTimeout(function () { ctl.abort(); }, 10000);
+    var res = await fetch(url.replace(/\/$/, '') + '/models', {
+      method: 'GET', signal: ctl.signal,
+      headers: { 'Authorization': 'Bearer ' + key }
+    });
+    clearTimeout(tm);
+    if (!res.ok) throw new Error('http ' + res.status);
+    var j = await res.json();
+    var ids = (j.data || j.models || []).map(function (x) { return x.id || x.name || x; }).filter(Boolean);
+    if (!ids.length) throw new Error('empty');
+    $('cfgModels').innerHTML = ids.map(function (x) { return '<option value="' + x + '"></option>'; }).join('');
+    if (!$('cfgModel').value) $('cfgModel').value = ids[0];
+    el.style.color = '#1B7A5A';
+    el.textContent = '✓ 共 ' + ids.length + ' 个模型，可点输入框选择';
+  } catch (e) {
+    el.style.color = '#B83A2E';
+    el.textContent = '✕ 拉取失败（部分服务商不允许浏览器直接调用），请手动填写模型名';
+  }
+}
+
 /* 测试连接 */
 async function testLLM() {
   var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim(), model = $('cfgModel').value.trim();
@@ -923,6 +991,47 @@ function clearCfg() {
   $('modePill').textContent = '本地推理引擎';
   $('cfgTest').textContent = '';
   closeCfg();
+}
+
+
+/* 通用对话调用：返回字符串或 null */
+async function postChat(url, key, model, messages) {
+  var ctl = new AbortController();
+  var tm = setTimeout(function () { ctl.abort(); }, 15000);
+  try {
+    var res = await fetch(url.replace(/\/$/, '') + '/chat/completions', {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({ model: model || 'deepseek-chat', temperature: 0.3, max_tokens: 400, messages: messages })
+    });
+    clearTimeout(tm);
+    if (!res.ok) return null;
+    var j = await res.json();
+    return ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim() || null;
+  } catch (e) { clearTimeout(tm); return null; }
+}
+
+async function chatComplete(messages) {
+  var own = llmCfg();
+  if (own && own.url && own.key) {
+    return await postChat(own.url, own.key, own.model, messages);
+  }
+  if (API_ON && TOKEN) {
+    try {
+      var r = await fetch('/api/llm/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+        body: JSON.stringify({ messages: messages })
+      });
+      if (r.ok) { var j = await r.json(); return j.content || null; }
+    } catch (e) { }
+  }
+  return null;
+}
+
+function hasModel() {
+  var own = llmCfg();
+  return !!(own && own.url && own.key) || (API_ON && TOKEN);
 }
 
 /* ================= 人工复核（强制流程） ================= */

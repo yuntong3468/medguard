@@ -213,6 +213,39 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { id: rec.id });
     }
 
+    /* 大模型代理：密钥只在服务端 */
+    if (p === '/api/llm/chat' && req.method === 'POST') {
+      if (!userFrom(req)) return send(res, 401, { error: '未登录' });
+      const key = process.env.MG_LLM_KEY;
+      if (!key) return send(res, 503, { error: 'server has no MG_LLM_KEY' });
+      const base = (process.env.MG_LLM_URL || 'https://api.deepseek.com/v1').replace(/\/$/, '');
+      const model = process.env.MG_LLM_MODEL || 'deepseek-chat';
+      const payload = await body(req);
+      try {
+        const ctl = new AbortController();
+        const tm = setTimeout(() => ctl.abort(), 15000);
+        const r = await fetch(base + '/chat/completions', {
+          method: 'POST',
+          signal: ctl.signal,
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+          body: JSON.stringify({
+            model: model,
+            temperature: 0,
+            max_tokens: 220,
+            messages: payload.messages || []
+          })
+        });
+        clearTimeout(tm);
+        const text = await r.text();
+        if (!r.ok) return send(res, 502, { error: 'upstream ' + r.status, detail: text.slice(0, 200) });
+        const j = JSON.parse(text);
+        const content = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+        return send(res, 200, { content: content });
+      } catch (e) {
+        return send(res, 502, { error: 'upstream failed' });
+      }
+    }
+
     const m = p.match(/^\/api\/cases\/([\w-]+)$/);
     if (m && req.method === 'PATCH') {
       if (!userFrom(req)) return send(res, 401, { error: '未登录' });
@@ -241,4 +274,5 @@ server.listen(PORT, () => {
   console.log('static dir :', STATIC_DIR || '(未找到)');
   console.log('data file  :', DATA_FILE);
   console.log('accounts   :', Object.keys(USERS).join(', '));
+  console.log('llm proxy  :', process.env.MG_LLM_KEY ? 'enabled' : 'disabled (no MG_LLM_KEY)');
 });
