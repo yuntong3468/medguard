@@ -1,0 +1,729 @@
+/* MedGuard 全科智诊体 · 临床推理引擎
+ * 三段能力：辅助诊断（鉴别排序+红旗分诊）/ 健康管理（分层+随访）/ 流程优化（去向+路径）
+ * 纯本地、无外部依赖、可离线运行。
+ */
+(function (global) {
+  'use strict';
+
+  /* ---------------- 1. 症状与体征词表 ---------------- */
+  // 标准名 -> 别名（同义词/口语/缩写）
+  const SYM = {
+    '胸痛': ['胸痛', '胸口痛', '心口痛', '心前区痛', '胸骨后痛', '胸部压榨', '胸背部', '背部剧痛'],
+    '放射痛': ['放射痛', '左肩', '左臂', '后背痛', '肩背痛', '下颌痛', '牙痛'],
+    '出汗': ['出汗', '大汗', '冷汗', '冒汗'],
+    '气短': ['气短', '呼吸困难', '喘不上气', '胸闷气短', '憋气'],
+    '心悸': ['心悸', '心慌', '心跳快', '心跳乱'],
+    '晕厥': ['晕厥', '昏倒', '晕倒', '意识丧失', '眼前发黑'],
+    '水肿': ['水肿', '浮肿', '腿肿', '脚肿'],
+    '端坐呼吸': ['端坐呼吸', '躺不下', '不能平卧', '平卧加重', '夜间憋醒', '阵发性呼吸困难'],
+    '咳嗽': ['咳嗽', '干咳', '咳'],
+    '咳痰': ['咳痰', '痰', '黄痰', '白痰', '脓痰'],
+    '咯血': ['咯血', '痰中带血', '咳血'],
+    '发热': ['发热', '发烧', '体温高', '低烧', '高烧'],
+    '咽痛': ['咽痛', '嗓子疼', '喉咙痛', '咽干'],
+    '流涕': ['流涕', '流鼻涕', '鼻塞', '打喷嚏'],
+    '乏力': ['乏力', '没力气', '疲劳', '浑身没劲', '虚弱'],
+    '体重下降': ['体重下降', '消瘦', '瘦了', '体重减轻'],
+    '多饮': ['多饮', '口渴', '喝水多', '口干'],
+    '多尿': ['多尿', '尿多', '夜尿多', '起夜'],
+    '多食': ['多食', '吃得多', '食欲亢进'],
+    '腹痛': ['腹痛', '肚子痛', '肚子疼', '腹部疼痛'],
+    '上腹痛': ['上腹痛', '胃痛', '胃疼', '剑突下痛', '中上腹痛'],
+    '右下腹痛': ['右下腹痛', '右下腹压痛', '麦氏点'],
+    '右上腹痛': ['右上腹痛', '右肋下痛', '右上腹压痛'],
+    '反酸': ['反酸', '烧心', '泛酸', '反流'],
+    '恶心': ['恶心', '想吐'],
+    '呕吐': ['呕吐', '吐了', '呕'],
+    '呕血': ['呕血', '吐血', '咖啡色'],
+    '黑便': ['黑便', '柏油便', '大便发黑'],
+    '腹泻': ['腹泻', '拉肚子', '稀便', '水样便', '大便次数多'],
+    '便秘': ['便秘', '大便干', '排便困难'],
+    '腹胀': ['腹胀', '肚子胀', '胀气'],
+    '黄疸': ['黄疸', '皮肤发黄', '眼睛发黄'],
+    '头痛': ['头痛', '头疼', '脑袋疼'],
+    '头晕': ['头晕', '头昏', '眩晕', '天旋地转', '晕乎乎'],
+    '偏侧头痛': ['偏侧头痛', '一边头痛', '太阳穴跳'],
+    '视物模糊': ['视物模糊', '看不清', '视力下降', '复视'],
+    '言语不清': ['言语不清', '说话不清', '口齿不清', '失语'],
+    '肢体无力': ['肢体无力', '一侧无力', '偏瘫', '手脚没劲', '抬不起来'],
+    '口角歪斜': ['口角歪斜', '嘴歪', '面瘫'],
+    '麻木': ['麻木', '发麻', '刺痛', '感觉异常'],
+    '抽搐': ['抽搐', '抽风', '痉挛'],
+    '尿频': ['尿频', '老想尿', '尿次数多'],
+    '尿急': ['尿急', '憋不住尿'],
+    '尿痛': ['尿痛', '排尿痛', '小便疼', '烧灼感'],
+    '血尿': ['血尿', '尿中带血', '尿血'],
+    '腰痛': ['腰痛', '腰疼', '腰部酸痛'],
+    '肾绞痛': ['肾绞痛', '腰部绞痛', '侧腹痛', '腰腹绞痛'],
+    '关节痛': ['关节痛', '关节疼', '关节肿', '脚趾痛', '大脚趾', '痛风'],
+    '皮疹': ['皮疹', '起疹子', '红斑', '风团', '荨麻疹', '疙瘩'],
+    '瘙痒': ['瘙痒', '痒', '很痒'],
+    '水疱': ['水疱', '疱疹', '起泡', '成簇'],
+    '颈痛': ['颈痛', '脖子痛', '颈肩痛', '脖子僵'],
+    '腰背痛': ['腰背痛', '后背痛', '腰背酸'],
+    '下肢放射痛': ['下肢放射痛', '腿麻', '串痛', '坐骨神经'],
+    '消瘦盗汗': ['盗汗', '夜间出汗', '低热盗汗'],
+    '失眠': ['失眠', '睡不着', '入睡困难', '早醒', '睡眠差'],
+    '焦虑': ['焦虑', '紧张', '心慌不安', '担心', '恐慌'],
+    '情绪低落': ['情绪低落', '抑郁', '没兴趣', '高兴不起来'],
+    '鼻痒': ['鼻痒', '鼻子痒', '眼痒'],
+    '喘息': ['喘息', '喘鸣', '哮鸣', '呼吸有声音'],
+    '意识改变': ['意识改变', '意识模糊', '嗜睡', '昏迷', '反应迟钝'],
+    '脱水': ['脱水', '口干尿少', '皮肤干', '眼窝凹陷'],
+    '苍白': ['苍白', '面色苍白', '睑结膜苍白'],
+    '血压高': ['血压高', '血压升高', '高血压'],
+    '血糖高': ['血糖高', '血糖升高', '糖尿病']
+  };
+
+  /* ---------------- 2. 危险因素 ---------------- */
+  const RISK = {
+    '年龄>45': ['45岁', '50岁', '55岁', '60岁', '65岁', '70岁', '老年'],
+    '年龄>60': ['60岁', '65岁', '70岁', '75岁', '80岁', '老年'],
+    '吸烟': ['吸烟', '抽烟', '烟龄'],
+    '高血压': ['高血压', '血压高'],
+    '糖尿病': ['糖尿病', '血糖高'],
+    '高血脂': ['高血脂', '血脂高', '胆固醇高'],
+    '肥胖': ['肥胖', '超重', '体重指数高'],
+    '家族史': ['家族史', '父亲', '母亲', '家族中有'],
+    '妊娠': ['妊娠', '怀孕', '孕'],
+    '口服避孕药': ['避孕药'],
+    '长期卧床': ['卧床', '久坐', '术后'],
+    '近期手术': ['手术', '术后'],
+    '免疫抑制': ['免疫抑制', '化疗', '激素'],
+    '饮酒': ['饮酒', '喝酒', '酗酒'],
+    '冠心病': ['冠心病', '心梗', '心绞痛', '支架', '搭桥']
+  };
+
+  /* ---------------- 3. 疾病知识库 ----------------
+   * 格式: id|名称|科室|层级|典型表现(症状*权重)|危险因素(因素*权重)|红旗|检查|处理|随访
+   */
+const RAW = [
+    'ACS~~急性冠脉综合征~~心血管内科~~急诊~~胸痛*3 出汗*2 放射痛*2 气短*2 恶心*1 心悸*1~~年龄>45*1 吸烟*2 高血压*1 糖尿病*1 高血脂*1~~胸痛持续>20分钟不缓解|伴大汗或濒死感|伴晕厥~~心电图（10分钟内）|肌钙蛋白|床旁心脏超声~~立即嚼服阿司匹林300mg（无禁忌）|建立静脉通路、心电监护|启动胸痛中心转运~~出院后双联抗血小板、他汀，1个月内心内科随访~~压榨 大汗 放射 濒死',
+    'AD~~主动脉夹层~~血管外科~~急诊~~胸痛*2 腰背痛*2 腹痛*1 放射痛*2 晕厥*1~~高血压*3 年龄>45*1 妊娠*1~~撕裂样剧痛|双上肢血压不对称|脉搏短绌~~双侧血压测量|主动脉CTA（急诊）|D-二聚体~~绝对卧床、控制心率血压|禁止抗凝抗血小板|立即转诊血管外科评估~~术后长期血压管理，3个月复查CTA~~撕裂 刀割 血压相差 双上肢',
+    'PE~~肺栓塞~~呼吸内科~~急诊~~气短*3 胸痛*2 心悸*1 咯血*1 晕厥*1~~长期卧床*2 近期手术*2 妊娠*1 口服避孕药*1 肥胖*1~~突发气短伴低氧|单侧下肢肿胀|不明原因心动过速~~D-二聚体|肺动脉CTA|下肢静脉超声~~吸氧、心电监护|无禁忌时启动抗凝|血流动力学不稳定转诊溶栓评估~~抗凝3-6个月，复查超声~~突发 下肢肿 术后',
+    'STROKE~~急性脑卒中~~神经内科~~急诊~~肢体无力*3 言语不清*3 口角歪斜*2 头晕*1 视物模糊*1 意识改变*1~~高血压*2 糖尿病*1 吸烟*1 年龄>60*1~~突发一侧肢体无力|言语不清或理解障碍|症状数分钟内达高峰~~头颅CT平扫（立即）|血糖|NIHSS评分~~记录发病时间（溶栓时间窗4.5小时）|禁止自行喂水喂药|启动卒中绿色通道~~出院后二级预防，1个月神经内科随访~~突发 偏瘫 嘴歪 说话不清',
+    'GI_BLEED~~上消化道出血~~消化内科~~急诊~~呕血*3 黑便*3 上腹痛*1 头晕*1 乏力*1 苍白*1~~饮酒*1~~呕血或咖啡色呕吐物|柏油样黑便|伴头晕、心率快~~血常规|凝血功能|急诊胃镜~~禁食、建立静脉通路|抑酸治疗|评估输血指征~~出血停止后根除幽门螺杆菌，4周复查~~咖啡色 柏油',
+    'DKA~~糖尿病酮症酸中毒~~内分泌科~~急诊~~多尿*2 多饮*2 恶心*1 呕吐*1 腹痛*1 气短*1 意识改变*2~~糖尿病*3~~血糖显著升高伴脱水|呼吸深大|意识改变~~血糖|血酮或尿酮|血气分析|电解质~~补液、静脉胰岛素|监测血钾|转诊内分泌科~~出院后胰岛素方案教育与血糖监测~~深大呼吸 烂苹果',
+    'HYPOGLY~~低血糖~~内分泌科~~急诊~~出汗*2 心悸*2 意识改变*2 乏力*1 抽搐*1~~糖尿病*3~~血糖<3.9mmol/L|意识障碍或抽搐|出冷汗手抖~~即刻血糖~~口服15g葡萄糖（清醒者）|静脉推注50%葡萄糖（昏迷）|15分钟后复测~~调整降糖方案，教育识别低血糖~~手抖 冷汗',
+    'ASTHMA~~哮喘急性发作~~呼吸内科~~急诊~~喘息*3 气短*3 咳嗽*2 胸闷*1~~家族史*1~~说话断续不能成句|三凹征、哮鸣音减弱|血氧<90%~~血氧饱和度|峰流速~~支气管舒张剂雾化|全身糖皮质激素|氧疗~~控制诱因，2周呼吸科随访~~哮鸣 喘鸣',
+    'APPEND~~急性阑尾炎~~普通外科~~急诊~~右下腹痛*3 腹痛*2 恶心*1 呕吐*1 发热*1~~年龄>45*0~~转移性右下腹痛|麦氏点压痛反跳痛|白细胞升高~~血常规|腹部超声~~禁食、静脉补液|抗感染|外科会诊评估手术~~术后或保守治疗后1周复诊~~转移 麦氏',
+    'PANCREA~~急性胰腺炎~~消化内科~~急诊~~上腹痛*3 腹痛*2 呕吐*2 腹胀*1~~饮酒*2 高血脂*1~~上腹剧痛向背部放射|淀粉酶或脂肪酶>3倍|伴腹胀、肠鸣音减弱~~血淀粉酶/脂肪酶|腹部CT|血常规电解质~~禁食、补液|镇痛、抑酸|重症转诊~~出院后戒酒、低脂饮食，1个月复查~~向背部放射 酒后',
+    'CHOLE~~急性胆囊炎/胆管炎~~普通外科~~急诊~~右上腹痛*3 腹痛*2 发热*1 黄疸*1 恶心*1~~年龄>45*1 肥胖*1~~右上腹痛伴发热|Murphy征阳性|黄疸+寒战高热~~腹部超声|血常规肝功能|胆红素~~禁食、抗感染|外科会诊~~胆囊切除后低脂饮食~~墨菲 油腻',
+    'ECTOPIC~~异位妊娠~~妇科~~急诊~~腹痛*3 晕厥*1 阴道出血*2~~妊娠*3~~停经后腹痛|阴道不规则出血|休克表现~~血HCG|经阴道超声|血型~~立即建立静脉通路|禁食、备血|妇科急诊会诊~~术后随访HCG至正常~~停经 阴道出血',
+    'URI~~上呼吸道感染~~全科~~门诊~~咽痛*2 流涕*2 咳嗽*1 发热*1 乏力*1~~年龄>60*0~~咽部充血|扁桃体肿大|无呼吸困难~~血常规（必要时）|C反应蛋白（必要时）~~对症退热|多饮水休息|多数无需抗菌药物~~症状加重3天复诊~~咽痛 流涕',
+    'CAP~~社区获得性肺炎~~呼吸内科~~门诊~~咳嗽*2 咳痰*3 发热*3 气短*2 胸痛*2 寒战*2~~年龄>60*2 糖尿病*1 免疫抑制*2~~高热不退|呼吸频率>30次/分|血氧<93%~~血常规|胸部X线或CT|CURB-65评分~~经验性抗感染|化痰、退热|48-72小时评估疗效~~2周复查胸片~~黄痰 脓痰 胸痛 寒战',
+    'BRONCH~~急性支气管炎~~呼吸内科~~门诊~~咳嗽*3 咳痰*2 胸闷*1~~吸烟*1~~咳嗽>3周|痰中带血|伴喘息~~胸部X线（必要时）|血常规（必要时）~~对症止咳化痰|多数病毒感染不需抗菌药|吸烟者戒烟~~2周未缓解复诊~~',
+    'COPD~~慢阻肺急性加重~~呼吸内科~~门诊~~咳嗽*2 咳痰*3 气短*3 喘息*1~~吸烟*2 年龄>60*3~~痰量增多变脓|静息气短|血氧下降~~血氧饱和度|肺功能|胸部CT~~支气管舒张剂|短期激素|有感染证据时抗感染~~长期吸入治疗，每3个月随访~~慢阻肺 长期咳痰',
+    'HTN~~高血压~~心血管内科~~门诊~~血压高*3 头晕*1 头痛*1 心悸*1 视物模糊*1~~年龄>45*1 肥胖*1 家族史*1 饮酒*1~~血压≥180/110伴症状|胸痛、气短|视物模糊~~诊室血压+家庭血压|血生化|尿常规|心电图~~生活方式干预|按分层选择降压药|目标<140/90（可耐受<130/80）~~每1-3个月随访，年度评估靶器官~~血压高 头晕',
+    'T2DM~~2型糖尿病~~内分泌科~~门诊~~血糖高*3 多饮*2 多尿*2 多食*1 体重下降*2 乏力*1 视物模糊*1~~肥胖*2 年龄>45*2 家族史*1~~随机血糖≥11.1伴症状|空腹血糖≥7.0|HbA1c≥6.5~~空腹血糖|HbA1c|尿微量白蛋白|眼底检查~~生活方式干预|二甲双胍为一线|合并症时选SGLT2i或GLP-1RA~~每3个月查HbA1c，年度并发症筛查~~多饮 多尿 消瘦',
+    'GERD~~胃食管反流病~~消化内科~~门诊~~反酸*3 上腹痛*2 胸痛*1 咳嗽*1 咽痛*1~~肥胖*1 吸烟*1~~吞咽困难|消瘦|呕血~~胃镜（年龄>40或报警症状）|幽门螺杆菌检测~~PPI 8周|抬高床头、减重、避免夜宵|无效者24小时pH监测~~8周复诊评估~~反酸 烧心',
+    'PUD~~消化性溃疡~~消化内科~~门诊~~上腹痛*3 反酸*1 恶心*1 腹胀*1~~吸烟*1 饮酒*1~~呕血或黑便|夜间痛醒|体重下降~~胃镜|幽门螺杆菌检测|血常规~~PPI+铋剂四联（HP阳性）|停用损伤药物|根除后4周复查呼气试验~~6-8周复查胃镜~~空腹 夜间痛 进食缓解 饥饿痛',
+    'AGE~~急性胃肠炎~~消化内科~~门诊~~腹泻*3 恶心*1 呕吐*1 腹痛*1 发热*1~~饮酒*0~~血便|高热|脱水尿少~~大便常规|电解质（重度）~~口服补液盐|补液为主，多数不需抗菌药|饮食清淡~~48小时无好转或出现血便复诊~~不洁饮食 水样便',
+    'UTI~~尿路感染~~泌尿外科~~门诊~~尿频*3 尿急*3 尿痛*3 腰痛*1 发热*1~~妊娠*1 糖尿病*1~~发热寒战+腰痛（肾盂肾炎）|妊娠期无症状菌尿|反复发作~~尿常规|尿培养|血常规（发热）~~多饮水|按药敏选择抗菌药|肾盂肾炎需静脉治疗~~2周复查尿常规~~尿频 尿痛',
+    'STONE~~泌尿系结石~~泌尿外科~~门诊~~肾绞痛*3 血尿*2 腰痛*2 恶心*1~~饮酒*0~~无法缓解的绞痛|发热+梗阻（感染性结石）|无尿~~尿常规|泌尿系超声或CT~~镇痛（NSAIDs）|解痉、多饮水|结石>6mm或梗阻需泌尿外科处理~~排石后复查超声~~绞痛 向会阴放射',
+    'MIGRAINE~~偏头痛~~神经内科~~门诊~~偏侧头痛*3 头痛*2 恶心*1 视物模糊*1~~家族史*1~~首次剧烈头痛（雷击样）|伴发热颈强|神经体征阳性~~神经系统查体|头颅CT或MRI（有红旗时）~~急性期NSAIDs或曲普坦|避免诱因、规律作息|记录头痛日记~~每月发作>4次考虑预防用药~~搏动性 单侧 畏光',
+    'TTH~~紧张性头痛~~神经内科~~门诊~~头痛*3 颈痛*1 失眠*1 焦虑*1~~长期卧床*1~~伴呕吐|夜间痛醒|进行性加重~~神经系统查体|必要时头颅MRI~~放松训练、改善睡眠|对症镇痛（避免长期使用）~~4周随访~~紧箍 压力大',
+    'BPPV~~良性阵发性位置性眩晕~~耳鼻喉科~~门诊~~头晕*3 恶心*1 呕吐*1 视物模糊*1~~年龄>60*1~~伴复视、构音障碍|持续眩晕不缓解|听力下降~~Dix-Hallpike试验|前庭功能检查~~Epley复位手法|避免快速转头~~1周复诊，复发再复位~~体位变化 翻身',
+    'GOUT~~痛风~~风湿免疫科~~门诊~~关节痛*3 关节肿*2 发热*1~~肥胖*1 饮酒*2 高血脂*1~~多关节受累|发热伴关节红肿（需排除感染）|肾功能不全~~血尿酸|关节超声|肾功能~~急性期NSAIDs或秋水仙碱|缓解期降尿酸|低嘌呤饮食、限酒~~每3个月查尿酸~~痛风 尿酸 第一跖趾 夜间 啤酒',
+    'AR~~过敏性鼻炎~~耳鼻喉科~~门诊~~鼻痒*3 流涕*2 打喷嚏*2 咽痛*1~~家族史*1~~伴哮喘发作|鼻息肉|单侧症状带血~~鼻内镜（必要时）|过敏原检测~~鼻用糖皮质激素|抗组胺药|规避过敏原~~季节性发作前2周预防用药~~晨起 连续喷嚏',
+    'URTICARIA~~荨麻疹~~皮肤科~~门诊~~皮疹*3 瘙痒*3~~免疫抑制*0~~喉头水肿、呼吸困难|血压下降|单个皮疹持续>24小时~~查体|血常规（反复发作）~~第二代抗组胺药|避免诱因|伴呼吸困难立即急诊~~2-4周复诊~~风团 时起时消',
+    'IDA~~缺铁性贫血~~血液科~~门诊~~乏力*3 苍白*2 头晕*1 心悸*1 气短*1~~妊娠*1 年龄>60*1~~黑便或便血|体重下降|异食癖~~血常规+铁代谢|大便隐血|妇科超声（女性）~~补铁治疗|查明失血原因~~2周复查血常规，纠正后继续3个月~~面色苍白 乏力',
+    'HYPERTHY~~甲状腺功能亢进~~内分泌科~~门诊~~心悸*2 体重下降*3 多食*2 出汗*2 乏力*1 焦虑*1~~家族史*1~~发热+心率>140（甲状腺危象）|突眼|甲状腺肿大伴杂音~~甲功五项|甲状腺超声|TRAb~~抗甲状腺药物|β受体阻滞剂对症|定期查血常规肝功~~4-6周复查甲功~~怕热 多汗 手抖',
+    'ANXIETY~~焦虑障碍~~精神心理科~~门诊~~焦虑*3 心悸*2 失眠*2 乏力*1 气短*1~~长期卧床*0~~自杀观念|惊恐发作伴胸痛（需先排除器质）|器质性检查阴性~~GAD-7量表|心电图（首次）|甲功（排除）~~心理教育、规律作息|认知行为治疗|必要时SSRI~~2-4周随访~~紧张 心慌 失眠',
+    'LUMBAR~~腰椎间盘突出~~骨科~~门诊~~腰背痛*3 下肢放射痛*3 麻木*1~~年龄>45*1 长期卧床*1~~马尾综合征（大小便障碍）|进行性肌力下降|发热（感染）~~腰椎MRI（有神经体征）|直腿抬高试验~~保守治疗：休息+康复训练|NSAIDs短期|无效或加重需骨科评估~~4-6周随访~~腿麻 久坐 弯腰',
+    'HZ~~带状疱疹~~皮肤科~~门诊~~水疱*3 皮疹*2 麻木*1 瘙痒*1~~年龄>60*1 免疫抑制*2~~眼部受累（眼周皮疹）|播散性皮疹|免疫抑制患者~~查体|必要时病毒PCR~~抗病毒（72小时内）|镇痛|局部护理~~2周复诊，警惕后遗神经痛~~单侧 成簇 烧灼',
+    'HF~~急性心力衰竭~~心血管内科~~急诊~~端坐呼吸*3 气短*3 水肿*2 乏力*1 心悸*1~~冠心病*3 高血压*2 年龄>60*2~~不能平卧|粉红色泡沫痰|血氧<90%~~BNP或NT-proBNP|心电图|床旁心脏超声|胸部X线~~半卧位、吸氧|利尿、扩血管|限制液体入量，记录出入量~~心内科随访，控制血压与容量~~不能平卧 泡沫痰 夜间憋醒'
+  ];
+
+  function parseDiseases() {
+    return RAW.map(function (line) {
+      const p = line.split('~~');
+      const parseKV = function (s) {
+        const out = {};
+        s.trim().split(/\s+/).forEach(function (t) {
+          if (!t) return;
+          const m = t.split('*');
+          out[m[0]] = parseFloat(m[1] || 1);
+        });
+        return out;
+      };
+      const arr = function (s) { return s && s.trim() ? s.trim().split('|') : []; };
+      return {
+        id: p[0], name: p[1], dept: p[2], level: p[3],
+        sym: parseKV(p[4]),
+        risk: parseKV(p[5]),
+        red: arr(p[6]),
+        workup: arr(p[7]),
+        tx: arr(p[8]),
+        fu: p[9],
+        boost: (p[10] || '').trim().split(/\s+/).filter(Boolean)
+      };
+    });
+  }
+
+  const DISEASES = parseDiseases();
+
+  /* ---------------- 4. 红旗预警（跨病种，优先级最高） ---------------- */
+  const REDFLAGS = [
+    { id: 'R01', name: '急性冠脉综合征可能', kw: ['胸痛', '胸闷', '心前区痛'], need: ['出汗', '放射痛', '晕厥', '濒死'],
+      action: '10 分钟内完成心电图；立即启动胸痛中心流程；禁止让患者自行离院。', level: '急诊' },
+    { id: 'R02', name: '主动脉夹层可能', kw: ['胸痛', '腰背痛', '腹痛'], need: ['撕裂', '刀割', '血压不对称'],
+      action: '双侧血压测量；急诊主动脉 CTA；严格控制心率血压；禁止抗凝。', level: '急诊' },
+    { id: 'R03', name: '脑卒中可能', kw: ['肢体无力', '言语不清', '口角歪斜'], need: ['突然', '突发'],
+      action: '记录发病时间；立即头颅 CT；4.5 小时内评估溶栓；启动卒中绿色通道。', level: '急诊' },
+    { id: 'R04', name: '过敏性休克可能', kw: ['皮疹', '瘙痒'], need: ['呼吸困难', '喉头', '血压下降', '晕厥'],
+      action: '立即肌注肾上腺素 0.3-0.5mg；平卧、吸氧；呼叫急救。', level: '急诊' },
+    { id: 'R05', name: '消化道大出血可能', kw: ['呕血', '黑便'], need: ['头晕', '心悸', '乏力'],
+      action: '禁食、建立静脉通路；查血常规凝血；急诊胃镜。', level: '急诊' },
+    { id: 'R06', name: '异位妊娠破裂可能', kw: ['腹痛', '阴道出血'], need: ['停经', '晕厥', '妊娠'],
+      action: '立即查血 HCG + 经阴道超声；建立静脉通路；妇科急诊会诊。', level: '急诊' },
+    { id: 'R07', name: '脓毒症可能', kw: ['发热'], need: ['意识改变', '血压低', '寒战', '低血压'],
+      action: '测生命体征与乳酸；1 小时内经验性抗感染；评估转诊。', level: '急诊' },
+    { id: 'R08', name: '低血糖危象可能', kw: ['出汗', '心悸', '意识改变'], need: ['糖尿病', '手抖'],
+      action: '即刻测血糖；<3.9mmol/L 立即口服葡萄糖或静脉推注。', level: '急诊' }
+  ];
+
+  /* ---------------- 5. 用药安全 ---------------- */
+  const DRUG_SAFETY = [
+    { drug: '阿司匹林', caution: '活动性消化道出血、阿司匹林过敏', note: 'ACS 无禁忌时 300mg 嚼服' },
+    { drug: '布洛芬/NSAIDs', caution: '消化性溃疡、肾功能不全、妊娠晚期、抗凝治疗中', note: '短期最低有效剂量' },
+    { drug: '左氧氟沙星', caution: '18 岁以下、妊娠哺乳、肌腱病变史', note: '避免与含铝镁制剂同服' },
+    { drug: '二甲双胍', caution: 'eGFR<30、严重感染缺氧、造影前后', note: '随餐服用减少胃肠反应' },
+    { drug: 'ACEI/ARB', caution: '妊娠、双侧肾动脉狭窄、高钾血症', note: '用药 1-2 周复查肾功能血钾' },
+    { drug: 'β受体阻滞剂', caution: '支气管哮喘急性期、严重心动过缓、失代偿心衰', note: '哮喘患者慎用' },
+    { drug: '华法林', caution: '妊娠、活动性出血、依从性差', note: '监测 INR，注意食物药物相互作用' },
+    { drug: '糖皮质激素', caution: '活动性感染未控制、消化道溃疡', note: '不可骤停，需逐渐减量' }
+  ];
+
+
+  /* ---------------- 5b. 用药安全提示 ---------------- */
+  const DRUG_LIST = [
+    { names: ['阿司匹林', '拜阿司匹灵'], note: '活动性消化道出血、阿司匹林过敏者禁用；ACS 无禁忌时 300mg 嚼服' },
+    { names: ['布洛芬', '双氯芬酸', '塞来昔布'], note: '消化性溃疡、肾功能不全、妊娠晚期、抗凝治疗中慎用；短期最低有效剂量' },
+    { names: ['左氧氟沙星', '莫西沙星'], note: '18 岁以下、妊娠哺乳、肌腱病变史禁用；避免与含铝镁制剂同服' },
+    { names: ['二甲双胍'], note: 'eGFR<30、严重感染缺氧、造影前后停用；随餐服用减少胃肠反应' },
+    { names: ['氨氯地平', '缬沙坦', '依那普利', '培哚普利'], note: '妊娠禁用；ACEI/ARB 用药 1-2 周复查肾功能与血钾' },
+    { names: ['美托洛尔', '比索洛尔'], note: '支气管哮喘急性期、严重心动过缓、失代偿心衰慎用' },
+    { names: ['华法林'], note: '妊娠、活动性出血禁用；监测 INR，注意食物药物相互作用' },
+    { names: ['地塞米松', '泼尼松', '甲泼尼龙'], note: '活动性感染未控制、消化道溃疡慎用；不可骤停，需逐渐减量' },
+    { names: ['硝酸甘油'], note: '低血压、右室心梗、24 小时内用过 PDE5 抑制剂者禁用' }
+  ];
+
+  function drugHints(text) {
+    const raw = String(text || '');
+    const out = [];
+    DRUG_LIST.forEach(function (d) {
+      const hit = d.names.filter(function (n) { return raw.indexOf(n) >= 0; });
+      if (hit.length) out.push({ drug: hit[0], note: d.note });
+    });
+    return out;
+  }
+
+
+  /* 把「1.一个小时 2.是」这类回答，按编号对回具体问题 */
+  const DUR_RE = /([0-9零一二三四五六七八九十两半数几]+)\s*个?\s*(小时|天|日|周|月|年)/;
+  function resolveAnswer(raw, asks) {
+    if (!asks || !asks.length) return '';
+    var adds = [];
+    var numbered = [];
+    var pieces = raw.split(/(?=\d{1,2}\s*[.、)）])/);
+    pieces.forEach(function (piece) {
+      var m = piece.match(/^\s*(\d{1,2})\s*[.、)）]\s*([\s\S]*)$/);
+      if (m) numbered.push({ idx: parseInt(m[1], 10) - 1, text: m[2] });
+    });
+    var chunks = numbered.length ? numbered : raw.split(/[。；;，,]/).map(function (t, i) { return { idx: i, text: t }; });
+
+    chunks.forEach(function (c) {
+      var a = asks[c.idx];
+      if (!a) return;
+      var t = (c.text || '').replace(/^[\s:：]+/, '').trim();
+      if (a.type === 'duration') {
+        var d = t.match(DUR_RE);
+        if (d) adds.push('持续' + d[0]);
+      } else if (a.type === 'symptom') {
+        if (/^(是|有|对|嗯|确实|yes)/i.test(t)) adds.push(a.value);
+        else if (/^(不|没|无|否|no)/i.test(t)) adds.push('无' + a.value);
+      }
+    });
+
+    if (!adds.length) {
+      var d2 = raw.match(DUR_RE);
+      if (d2) adds.push('持续' + d2[0]);
+      var sym = asks.filter(function (x) { return x.type === 'symptom'; })[0];
+      if (sym && /(^|[，,。；;\s])是([，,。；;\s]|$)/.test(raw)) adds.push(sym.value);
+    }
+    return adds.join(' ');
+  }
+
+  /* ---------------- 6. 文本解析 ---------------- */
+  function normalize(text) { return String(text || '').replace(/\s+/g, ''); }
+
+  function findSymptoms(text) {
+    const hit = []; const raw = normalize(text);
+    Object.keys(SYM).forEach(function (k) {
+      if (SYM[k].some(function (a) { return raw.indexOf(a) >= 0; })) hit.push(k);
+    });
+    // 「无X / 否认X」视为阴性：记录但降权
+    const negated = [];
+    Object.keys(SYM).forEach(function (k) {
+      SYM[k].forEach(function (a) {
+        const re = new RegExp('(无|否认|未见|不伴|没有)[^，。；,;]{0,4}' + a);
+        if (re.test(raw)) negated.push(k);
+      });
+    });
+    var pos = hit.filter(function (x) { return negated.indexOf(x) < 0; });
+    var specific = ['上腹痛', '右下腹痛', '右上腹痛', '肾绞痛'];
+    if (specific.some(function (sx) { return pos.indexOf(sx) >= 0; })) {
+      pos = pos.filter(function (x) { return x !== '腹痛'; });
+    }
+    return { positive: pos, negative: negated };
+  }
+
+  function findRisks(text) {
+    const raw = normalize(text); const out = [];
+    Object.keys(RISK).forEach(function (k) {
+      const hit = RISK[k].some(function (a) {
+        if (raw.indexOf(a) < 0) return false;
+        // 否定语境：没有高血压 / 否认吸烟 / 不喝酒
+        const neg = new RegExp('(无|没有|否认|不|从未)[^，。；,;]{0,3}' + a);
+        return !neg.test(raw);
+      });
+      if (hit) out.push(k);
+    });
+    return out;
+  }
+
+  function findVitals(text) {
+    const raw = normalize(text); const v = {};
+    let m;
+    if ((m = raw.match(/(?:血压|BP)[:：]?\s*(\d{2,3})\s*\/\s*(\d{2,3})/i))) { v.sbp = +m[1]; v.dbp = +m[2]; }
+    else if ((m = raw.match(/(\d{2,3})\s*\/\s*(\d{2,3})\s*mmHg/i))) { v.sbp = +m[1]; v.dbp = +m[2]; }
+    if ((m = raw.match(/(?:T|体温)[:：]?(\d{2}\.?\d?)/i))) v.temp = +m[1];
+    else if ((m = raw.match(/(\d{2}(?:\.\d)?)\s*(?:度|℃)/))) v.temp = +m[1];
+    if ((m = raw.match(/(?:HR|心率|脉搏)[:：]?(\d{2,3})/i))) v.hr = +m[1];
+    if ((m = raw.match(/(?:SpO2|血氧)[:：]?(\d{2,3})/i))) v.spo2 = +m[1];
+    if ((m = raw.match(/(?:血糖|Glu)[:：]?(\d{1,2}\.?\d?)/i))) v.glu = +m[1];
+    if ((m = raw.match(/(\d{1,3})\s*岁/))) v.age = +m[1];
+    if (/男/.test(raw)) v.sex = '男'; else if (/女/.test(raw)) v.sex = '女';
+    var dm = raw.match(/([0-9零一二三四五六七八九十两半数几]+)\s*个?\s*(小时|天|日|周|月|年)/g);
+    if (dm && dm.length) v.duration = dm[dm.length - 1];
+    return v;
+  }
+
+  /* ---------------- 7. 鉴别诊断推理 ---------------- */
+  function differential(pos, risks, sex, raw) {
+    const out = [];
+    DISEASES.forEach(function (d) {
+      if (d.id === 'ECTOPIC' && sex !== '女') return;
+      let max = 0, got = 0, matched = [];
+      Object.keys(d.sym).forEach(function (s) {
+        max += d.sym[s];
+        if (pos.indexOf(s) >= 0) { got += d.sym[s]; matched.push(s); }
+      });
+      let rmax = 0, rgot = 0, rmatched = [];
+      Object.keys(d.risk).forEach(function (r) {
+        rmax += d.risk[r];
+        if (risks.indexOf(r) >= 0) { rgot += d.risk[r]; rmatched.push(r); }
+      });
+      const symScore = max ? got / max : 0;
+      const riskScore = rmax ? Math.min(1, rgot / Math.max(rmax, 2)) : 0;
+      let bh = 0;
+      (d.boost || []).forEach(function (k) { if (raw.indexOf(k) >= 0) bh++; });
+      const score = Math.min(1, symScore * 0.85 + riskScore * 0.15 + bh * 0.05);
+      const missing = Object.keys(d.sym).filter(function (s) {
+        return d.sym[s] >= 2 && matched.indexOf(s) < 0;
+      });
+      if (score > 0 && (matched.length >= 1 || bh >= 2)) out.push({
+        id: d.id, name: d.name, dept: d.dept, level: d.level,
+        score: Math.round(score * 100), matched: matched, risks: rmatched, missing: missing,
+        workup: d.workup, tx: d.tx, fu: d.fu, red: d.red
+      });
+    });
+    out.sort(function (a, b) { return b.score - a.score; });
+    return out;
+  }
+
+  function checkRedflags(pos, text) {
+    const raw = normalize(text); const hits = [];
+    REDFLAGS.forEach(function (r) {
+      const hasMain = r.kw.some(function (k) { return pos.indexOf(k) >= 0; });
+      const hasNeed = r.need.some(function (k) { return pos.indexOf(k) >= 0 || raw.indexOf(k) >= 0; });
+      if (hasMain && hasNeed) hits.push(r);
+    });
+    return hits;
+  }
+
+  function triage(redflags, pos, vitals, top) {
+    if (redflags.length) return { level: '急诊', color: '#B83A2E', reason: redflags[0].name + '：存在红旗征象，需立即处置' };
+    if (vitals.spo2 && vitals.spo2 < 93) return { level: '急诊', color: '#B83A2E', reason: '血氧饱和度 <93%' };
+    if (vitals.sbp >= 180 || vitals.dbp >= 110) return { level: '急诊', color: '#B83A2E', reason: '血压 ≥180/110 mmHg' };
+    if (vitals.temp && vitals.temp >= 39.5) return { level: '24 小时内', color: '#D9841B', reason: '高热 ≥39.5℃' };
+    if (vitals.glu && (vitals.glu >= 16.7 || vitals.glu < 3.9)) return { level: '急诊', color: '#B83A2E', reason: '血糖异常（' + vitals.glu + ' mmol/L）' };
+    if (top && top.level === '急诊' && top.score >= 45) return { level: '急诊', color: '#B83A2E', reason: '首要鉴别诊断「' + top.name + '」属急症，需急诊处置' };
+    if (top && top.score >= 48) return { level: '门诊', color: '#117A8B', reason: '可门诊处理，按路径完善检查' };
+    return { level: '门诊/观察', color: '#6B7B83', reason: '信息不足，建议补充病史后复评' };
+  }
+
+  /* ---------------- 8. 健康管理 ---------------- */
+  function healthPlan(pos, risks, vitals, top) {
+    const plans = [];
+    const hasHTN = pos.indexOf('血压高') >= 0 || risks.indexOf('高血压') >= 0 || (vitals.sbp && vitals.sbp >= 140);
+    const hasDM = pos.indexOf('血糖高') >= 0 || risks.indexOf('糖尿病') >= 0 ||
+      (vitals.glu && vitals.glu >= 7);
+
+    if (hasHTN) {
+      const sbp = vitals.sbp || 150;
+      let tier = '低危', color = '#1FA98F';
+      if (sbp >= 180) { tier = '很高危'; color = '#B83A2E'; }
+      else if (sbp >= 160 || risks.length >= 2) { tier = '高危'; color = '#D9841B'; }
+      else if (risks.length === 1) { tier = '中危'; color = '#117A8B'; }
+      plans.push({
+        disease: '高血压', tier: tier, color: color,
+        target: '血压 <140/90 mmHg（可耐受者 <130/80）',
+        actions: ['限盐 <5g/日，减重、规律有氧运动', '家庭血压监测：晨起与睡前各 1 次，记录 7 天',
+          '按分层选择降压药，优先长效制剂', '每年评估心、脑、肾靶器官'],
+        followup: tier === '很高危' ? '2 周内复诊' : tier === '高危' ? '1 个月复诊' : '3 个月复诊'
+      });
+    }
+    if (hasDM) {
+      const glu = vitals.glu || 8.5;
+      const tier = glu >= 11.1 ? '显著升高' : glu >= 7.0 ? '已达诊断标准' : '需进一步确诊';
+      plans.push({
+        disease: '2 型糖尿病', tier: tier, color: glu >= 11.1 ? '#D9841B' : '#117A8B',
+        target: 'HbA1c <7.0%（老年/合并症可放宽至 8.0%）',
+        actions: ['确诊：空腹血糖、HbA1c、OGTT', '二甲双胍为一线，合并 ASCVD/CKD 优先 SGLT2i 或 GLP-1RA',
+          '饮食控制 + 每周 150 分钟中等强度运动', '每年眼底、尿微量白蛋白、足部检查'],
+        followup: '每 3 个月复查 HbA1c'
+      });
+    }
+    if (!plans.length && top) {
+      plans.push({
+        disease: top.name, tier: '待明确', color: '#117A8B',
+        target: '按诊断路径完成检查，明确诊断后制定方案',
+        actions: top.workup.slice(0, 2).concat(['记录症状变化与用药反应']),
+        followup: '1-2 周复诊评估'
+      });
+    }
+    return plans;
+  }
+
+  /* ---------------- 9. 追问策略（信息不足时） ---------------- */
+  function nextQuestions(state) {
+    const asks = [];
+    if (!state.vitals.duration) {
+      asks.push({ type: 'duration', text: '这些症状持续多久了？是突然出现还是逐渐加重？' });
+    }
+    const sexOnly = ['阴道出血', '停经', '妊娠'];
+    const cands = (state.diff && state.diff.length) ? state.diff.slice(0, 3) : (state.top ? [state.top] : []);
+    for (var i = 0; i < cands.length; i++) {
+      const miss = (cands[i].missing || []).filter(function (x) {
+        if ((state.negatives || []).indexOf(x) >= 0) return false;
+        return (state.vitals && state.vitals.sex === '女') || sexOnly.indexOf(x) < 0;
+      });
+      if (miss.length) {
+        asks.push({ type: 'symptom', value: miss[0], text: '是否伴有「' + miss[0] + '」？' });
+        break;
+      }
+    }
+    if (!state.risks.length) {
+      asks.push({ type: 'risk', text: '既往有高血压、糖尿病、吸烟史或类似家族史吗？' });
+    }
+    if (!state.vitals.temp && !state.vitals.sbp) {
+      asks.push({ type: 'vital', text: '方便的话，告诉我体温和血压（例如 T37.2℃、BP140/90mmHg）。' });
+    }
+    return asks.slice(0, 2);
+  }
+
+  /* ---------------- 9b. 个体化治疗 ---------------- */
+  // 患者画像标志（从病历文本抽取）
+  function extractProfile(text, age, risks, vitals) {
+    const raw = normalize(text);
+    const f = [];
+    const v = vitals || {};
+    if ((v.sbp && v.sbp >= 140) || /高血压/.test(raw)) f.push('高血压');
+    if ((v.glu && v.glu >= 7) || /糖尿病/.test(raw)) f.push('糖尿病');
+    if (/妊娠|怀孕|孕\d+周|哺乳/.test(raw)) f.push('妊娠');
+    if (age && age >= 65) f.push('老年');
+    if (/慢性肾|肾功能不全|肾衰|尿毒症|透析|肌酐升高|蛋白尿|eGFR/.test(raw)) f.push('CKD');
+    if (/eGFR\s*[<＜]\s*(30|15)|透析|尿毒症/.test(raw)) f.push('eGFR<30');
+    if (/冠心病|心梗|心绞痛|支架|搭桥|脑梗|卒中史|动脉粥样硬化|外周动脉/.test(raw)) f.push('ASCVD');
+    if (/心衰|心力衰竭|NYHA|射血分数/.test(raw)) f.push('心衰');
+    if (/消化性溃疡|胃溃疡|十二指肠溃疡|消化道出血|黑便/.test(raw)) f.push('消化性溃疡');
+    if (/哮喘|喘息|慢阻肺|COPD/.test(raw)) f.push('哮喘/COPD');
+    if (/痛风|尿酸高|高尿酸/.test(raw)) f.push('痛风');
+    const bm = raw.match(/BMI\s*[:：]?\s*(\d{2}(?:\.\d)?)/);
+    if ((bm && +bm[1] >= 28) || /肥胖|超重/.test(raw)) f.push('肥胖');
+    if (/肝硬化|肝功能不全|转氨酶升高|ALT\s*升高|AST\s*升高/.test(raw)) f.push('肝功能不全');
+    if (/反复低血糖|低血糖发作|进食差|独居|意识模糊/.test(raw)) f.push('低血糖风险');
+    if (/同时服用|长期服用.{0,6}种|多种药物|多重用药/.test(raw)) f.push('多重用药');
+    (risks || []).forEach(function (r) {
+      if (r === '吸烟' && f.indexOf('吸烟') < 0) f.push('吸烟');
+      if (r === '饮酒' && f.indexOf('饮酒') < 0) f.push('饮酒');
+      if (r === '糖尿病' && f.indexOf('糖尿病') < 0) f.push('糖尿病');
+      if (r === '高血压' && f.indexOf('高血压') < 0) f.push('高血压');
+    });
+    return f;
+  }
+
+  /* 病种级用药策略：base 首选；flags 按画像改方案；avoid 禁忌；monitor 监测 */
+  const TREAT = {
+    HTN: {
+      base: [['ACEI/ARB 或 CCB 单药起始', '无特殊合并症时的首选，长效制剂每日一次']],
+      flags: {
+        '老年': ['CCB 或低剂量利尿剂起始', '老年人动脉僵硬、容量依赖，CCB 更平稳，起始半量'],
+        '糖尿病': ['ACEI/ARB 优先', '合并糖尿病，兼顾肾脏保护'],
+        'CKD': ['ACEI/ARB（监测肌酐血钾）', '合并慢性肾病，降压同时延缓肾损害'],
+        'ASCVD': ['ACEI/ARB + β受体阻滞剂', '合并冠心病，兼顾心率与预后'],
+        '心衰': ['ACEI/ARB + β受体阻滞剂 + 利尿剂', '合并心衰，按心衰指南四联用药'],
+        '妊娠': ['拉贝洛尔或硝苯地平', '妊娠期禁用 ACEI/ARB'],
+        '痛风': ['避免噻嗪类利尿剂', '利尿剂升高尿酸，可能诱发痛风']
+      },
+      avoid: [['ACEI/ARB', '妊娠', '致胎儿肾发育不良，妊娠禁用'],
+              ['ACEI/ARB', '双侧肾动脉狭窄', '可致急性肾衰']],
+      monitor: ['用药 2-4 周复诊测血压，达标后每 3 个月一次', 'ACEI/ARB 起始 1-2 周查肾功能与血钾']
+    },
+    T2DM: {
+      base: [['二甲双胍 0.5g bid 起始（随餐）', '无禁忌时的一线用药，价格低、低血糖风险小']],
+      flags: {
+        'ASCVD': ['加用 SGLT2i 或 GLP-1RA', '合并动脉粥样硬化性心血管病，有心脑血管获益证据'],
+        '心衰': ['SGLT2i（达格列净/恩格列净）', '合并心衰，降低住院与心血管死亡风险'],
+        'CKD': ['SGLT2i，按 eGFR 调整剂量', '合并慢性肾病，延缓 eGFR 下降'],
+        '肥胖': ['GLP-1RA（司美格鲁肽）', 'BMI≥28，兼顾减重与血糖'],
+        '老年': ['DPP-4i 或低剂量二甲双胍，避免磺脲类', '老年人低血糖风险高，磺脲类易致严重低血糖'],
+        '低血糖风险': ['避免磺脲类与胰岛素强化', '反复低血糖者优先低风险药物']
+      },
+      avoid: [['二甲双胍', 'eGFR<30', '乳酸酸中毒风险，eGFR<30 禁用'],
+              ['二甲双胍', '造影检查前后', '需暂停 48 小时'],
+              ['SGLT2i', '反复泌尿生殖道感染', '增加感染风险']],
+      monitor: ['每 3 个月查 HbA1c', '每年查尿微量白蛋白/肌酐比、眼底、足部感觉', '起始或加量后 2-4 周复查肾功能']
+    },
+    CAP: {
+      base: [['经验性抗感染（按当地耐药情况选药）', '门诊 CAP 首选经验性治疗，48-72 小时评估疗效']],
+      flags: {
+        '老年': ['覆盖革兰阴性菌，疗程适当延长', '老年、基础病多，耐药风险高'],
+        '哮喘/COPD': ['避免β内酰胺类过敏风险，注意支气管舒张', '合并气道疾病需同时处理痉挛'],
+        '肝功能不全': ['避免大环内酯类', '经肝代谢，肝功能不全时慎用']
+      },
+      avoid: [['喹诺酮类', '妊娠', '影响软骨发育，妊娠哺乳禁用'],
+              ['喹诺酮类', '老年', '肌腱断裂与精神症状风险，老年人慎用']],
+      monitor: ['48-72 小时复评体温、呼吸频率、血氧', '2 周复查胸片确认吸收']
+    },
+    PUD: {
+      base: [['PPI 标准剂量 4-6 周', '抑酸促进溃疡愈合，是治疗基础']],
+      flags: {
+        '消化性溃疡': ['检测并根除幽门螺杆菌（四联 14 天）', 'HP 阳性者根除后复发率显著下降'],
+        '老年': ['同时评估抗血小板/NSAIDs 用药', '老年人常合用损伤胃黏膜药物']
+      },
+      avoid: [['NSAIDs', '消化性溃疡', '加重溃疡甚至出血，需停用或换药'],
+              ['阿司匹林', '活动性出血', '出血期禁用，稳定后评估再启动']],
+      monitor: ['疗程结束 4 周后复查呼气试验', '6-8 周复查胃镜评估愈合']
+    },
+    GERD: {
+      base: [['PPI 8 周', '足疗程抑酸是 GERD 的核心治疗']],
+      flags: {
+        '肥胖': ['减重 5-10% + 抬高床头', '腹压增高是反流的重要机制，减重效果明确'],
+        '老年': ['评估吞咽功能与药物相互作用', '老年人食管清除能力下降']
+      },
+      avoid: [['钙通道阻滞剂', 'GERD', '降低食管下括约肌压力，可能加重反流']],
+      monitor: ['8 周复诊评估症状', '无效者做 24 小时 pH 监测或胃镜']
+    },
+    UTI: {
+      base: [['按药敏选择抗菌药，疗程 3-7 天', '单纯性膀胱炎短疗程即可']],
+      flags: {
+        '妊娠': ['选择妊娠期安全药物（如头孢类），疗程延长', '妊娠期 UTI 需彻底治疗，避免肾盂肾炎'],
+        'CKD': ['按肾功能调整剂量', '经肾排泄，肾功能不全需减量'],
+        '糖尿病': ['控制血糖，疗程可延长', '高血糖增加复发与肾盂肾炎风险']
+      },
+      avoid: [['喹诺酮类', '妊娠', '妊娠期禁用'],
+              ['呋喃妥因', 'eGFR<30', '肾功能不全时无效且毒性增加']],
+      monitor: ['2 周复查尿常规', '反复发作者查泌尿系超声']
+    },
+    GOUT: {
+      base: [['急性期 NSAIDs 或秋水仙碱（尽早）', '发作 24 小时内用药效果最好']],
+      flags: {
+        'CKD': ['糖皮质激素或低剂量秋水仙碱', '肾功能不全时 NSAIDs 与常规剂量秋水仙碱风险高'],
+        '消化性溃疡': ['避免 NSAIDs，改用糖皮质激素', 'NSAIDs 增加消化道出血风险'],
+        'ASCVD': ['秋水仙碱需评估相互作用', '合并心血管病注意药物相互作用']
+      },
+      avoid: [['NSAIDs', 'CKD', '肾血流依赖前列腺素，可致急性肾损伤'],
+              ['秋水仙碱', 'eGFR<30', '蓄积中毒，需减量或禁用']],
+      monitor: ['急性期后 2 周复查尿酸', '降尿酸治疗每 3 个月查尿酸，目标 <360μmol/L']
+    },
+    HF: {
+      base: [['利尿剂缓解淤血 + 指南导向四联（ACEI/ARB/ARNI、β阻滞剂、MRA、SGLT2i）', 'HFrEF 的四联用药可显著降低死亡率']],
+      flags: {
+        'CKD': ['SGLT2i 与 ARNI 需监测肾功能与血钾', '肾功能不全时滴定更慢，注意高钾'],
+        '老年': ['起始半量、缓慢滴定', '老年人易低血压与肾功能恶化'],
+        '糖尿病': ['优先 SGLT2i', '兼顾心衰与血糖']
+      },
+      avoid: [['NSAIDs', '心衰', '水钠潴留，加重心衰'],
+              ['噻唑烷二酮类', '心衰', '引起液体潴留，心衰禁用']],
+      monitor: ['每日称体重，3 天增重 >2kg 需就诊', '滴定期 1-2 周复查肾功能、血钾']
+    },
+    ASTHMA: {
+      base: [['吸入激素（ICS）为基础，按需 SABA', 'ICS 是控制气道炎症的核心，单用 SABA 不安全']],
+      flags: {
+        '吸烟': ['加强 ICS 剂量并强调戒烟', '吸烟降低激素敏感性'],
+        '老年': ['检查吸入装置使用能力', '手部力量与认知影响吸入效果']
+      },
+      avoid: [['β受体阻滞剂', '哮喘/COPD', '可诱发支气管痉挛，非选择性者禁用']],
+      monitor: ['每 3 个月评估控制水平（ACT 评分）', '每年查肺功能']
+    },
+    ACS: {
+      base: [['双联抗血小板 + 他汀 + 抗凝（按流程）', '急性期按 ACS 指南执行，尽快再灌注']],
+      flags: {
+        '老年': ['评估出血风险，必要时调整抗栓强度', '高龄出血风险高，需平衡缺血与出血'],
+        'CKD': ['按肾功能调整抗凝与造影剂用量', '肾功能不全增加出血与造影剂肾病风险'],
+        '消化性溃疡': ['加用 PPI 保护胃黏膜', '双联抗血小板显著增加消化道出血风险']
+      },
+      avoid: [['NSAIDs', 'ASCVD', '增加心血管事件，ACS 后避免'],
+              ['替格瑞洛', '活动性出血', '出血期禁用']],
+      monitor: ['出院后 1 个月心内科随访', '双联抗血小板疗程按支架类型 6-12 个月']
+    },
+    STROKE: {
+      base: [['抗血小板或抗凝（按病因）+ 他汀 + 血压管理', '二级预防是降低复发的关键']],
+      flags: {
+        'ASCVD': ['强化他汀，LDL-C 目标 <1.8mmol/L', '明确动脉粥样硬化病因，需强化降脂'],
+        '老年': ['评估跌倒与出血风险', '高龄抗栓需权衡'],
+        '糖尿病': ['控制血糖，优先 SGLT2i/GLP-1RA', '糖尿病是卒中复发的重要危险因素']
+      },
+      avoid: [['抗凝', '活动性出血', '出血转化风险']],
+      monitor: ['1 个月神经内科随访', '每 3-6 个月复查血脂、血压达标情况']
+    },
+    COPD: {
+      base: [['长效支气管舒张剂（LAMA/LABA）', '长效制剂改善症状与急性加重']],
+      flags: {
+        '吸烟': ['戒烟是唯一能延缓肺功能下降的干预', '戒烟后 FEV1 下降速度明显减慢'],
+        '哮喘/COPD': ['评估吸入装置与依从性', '装置使用错误是控制不佳的常见原因']
+      },
+      avoid: [['β受体阻滞剂', '哮喘/COPD', '可能加重气道痉挛，需谨慎']],
+      monitor: ['每 3 个月评估 CAT 评分与急性加重次数', '每年查肺功能']
+    }
+  };
+
+  function planTreatment(diseaseId, profile, allText) {
+    const p = profile || [];
+    const t = TREAT[diseaseId];
+    const out = { recs: [], avoids: [], monitor: [], flags: p.slice(), personalized: false };
+
+    if (t) {
+      t.base.forEach(function (b) { out.recs.push({ drug: b[0], why: b[1], kind: 'base' }); });
+      Object.keys(t.flags).forEach(function (flag) {
+        if (p.indexOf(flag) >= 0) {
+          const v = t.flags[flag];
+          out.recs.push({ drug: v[0], why: v[1], kind: 'flag', flag: flag });
+          out.personalized = true;
+        }
+      });
+      (t.avoid || []).forEach(function (a) {
+        if (p.indexOf(a[1]) >= 0) out.avoids.push({ drug: a[0], when: a[1], why: a[2] });
+      });
+      out.monitor = (t.monitor || []).slice();
+      out.blocked = [];
+      out.recs = out.recs.filter(function (r) {
+        var hit = out.avoids.some(function (a) { return r.drug.indexOf(a.drug) >= 0; });
+        if (hit) { out.blocked.push({ drug: r.drug, why: '与患者画像冲突，需替换' }); return false; }
+        return true;
+      });
+    } else {
+      const d = DISEASES.filter(function (x) { return x.id === diseaseId; })[0];
+      if (d) d.tx.forEach(function (x) { out.recs.push({ drug: x, why: '', kind: 'base' }); });
+      out.monitor = [d ? d.fu : '按诊疗常规随访'];
+    }
+    return out;
+  }
+
+  /* ---------------- 9c. 生活方式与筛查处方 ---------------- */
+  function lifestylePlan(profile, vitals, risks) {
+    const p = profile || [];
+    const out = [];
+    if (p.indexOf('吸烟') >= 0) out.push('戒烟：设定戒烟日，必要时用尼古丁替代或伐尼克兰，避免与饮酒同场触发');
+    if (p.indexOf('饮酒') >= 0) out.push('限酒：男性 <25g/日、女性 <15g/日酒精，痛风与高血压者建议戒酒');
+    if (p.indexOf('肥胖') >= 0) out.push('减重：3-6 个月减当前体重的 5-10%，优先减少精制碳水与含糖饮料');
+    if (p.indexOf('高血压') >= 0) out.push('限盐 <5g/日，增加富钾食物（肾功能正常者）');
+    out.push('运动：每周 150 分钟中等强度有氧 + 2 次抗阻训练，量力而行');
+    if (vitals && vitals.glu >= 7) out.push('饮食：定时定量、控制总热量，餐后 30 分钟散步 15-20 分钟');
+    return out;
+  }
+
+  function screenPlan(score, vitals, profile) {
+    const p = profile || [];
+    const out = [];
+    const age = (vitals && vitals.age) || 0;
+    if (p.indexOf('糖尿病') >= 0 || p.indexOf('高血压') >= 0) out.push('每年：眼底、尿微量白蛋白、足部感觉、血脂');
+    if (age >= 65) out.push('每年流感疫苗、每 5 年肺炎球菌疫苗；评估跌倒与多重用药');
+    if (p.indexOf('吸烟') >= 0) out.push('低剂量螺旋 CT 肺癌筛查（50 岁以上、20 包年）');
+    if (p.indexOf('痛风') >= 0) out.push('每 3 个月血尿酸，目标 <360μmol/L');
+    return out;
+  }
+
+  /* ---------------- 10. 主入口 ---------------- */
+  function consult(text, prev) {
+    const state = prev || { history: [] };
+
+    // 把「1.一个小时 2.是」这类回答，按编号还原成对上一个问题的补充
+    var asks0 = state.asks || [];
+    var addon = '';
+    if (asks0.length) {
+      var looksLikeAnswer = text.length <= 30 || /\d\s*[.、)）]/.test(text);
+      if (looksLikeAnswer) addon = resolveAnswer(text, asks0);
+    }
+    const effText = addon ? (text + ' ' + addon) : text;
+    const allText = (state.history || []).join(' ') + ' ' + effText;
+    const found = findSymptoms(allText);
+    const risks = findRisks(allText);
+    const vitals = findVitals(allText);
+    const pos = found.positive.slice();
+    if (vitals.sbp && vitals.sbp >= 140 && pos.indexOf('血压高') < 0) pos.push('血压高');
+    if (vitals.glu && vitals.glu >= 7 && pos.indexOf('血糖高') < 0) pos.push('血糖高');
+    const neg = found.negative;
+
+    const rf = checkRedflags(pos, allText);
+    const diff = differential(pos, risks, vitals.sex, allText);
+    const top = diff[0];
+    const level = triage(rf, pos, vitals, top);
+    const plans = healthPlan(pos, risks, vitals, top);
+    const profile = extractProfile(allText, vitals.age, risks, vitals);
+    const treatment = planTreatment(top ? top.id : '', profile, allText);
+    const lifestyle = lifestylePlan(profile, vitals, risks);
+    const screens = screenPlan(top ? top.score : 0, vitals, profile);
+    const warnings = [];
+    if (vitals.age && vitals.age < 14) warnings.push('患者为儿童（<14 岁）：药物剂量须按体重计算，本建议仅作参考，请在儿科医师指导下用药。');
+    if (vitals.age && vitals.age >= 65) warnings.push('老年患者：注意多重用药与肾功能，起始剂量宜偏低。');
+
+    const state2 = {
+      history: (state.history || []).concat([effText]),
+      symptoms: pos, negatives: neg, risks: risks, vitals: vitals,
+      top: top,
+      diff: diff.slice(0, 3)
+    };
+
+    const enough = pos.length >= 2 && (vitals.duration || pos.length >= 3) && top && top.score >= 30;
+    const askList = enough ? [] : nextQuestions({ ...state2, vitals: vitals });
+    state2.asks = askList;
+
+    return {
+      input: text,
+      symptoms: pos, negatives: neg, risks: risks, vitals: vitals,
+      redflags: rf,
+      triage: level,
+      differential: diff.slice(0, 5),
+      health: plans,
+      profile: profile,
+      treatment: treatment,
+      lifestyle: lifestyle,
+      screens: screens,
+      warnings: warnings,
+      sufficient: enough,
+      addon: addon,
+      questions: askList.map(function (a) { return a.text; }),
+      asks: askList,
+      state: state2
+    };
+  }
+
+  global.MG = {
+    consult: consult, drugHints: drugHints, DISEASES: DISEASES, REDFLAGS: REDFLAGS,
+    DRUG_SAFETY: DRUG_SAFETY, SYM: SYM, RISK: RISK
+  };
+})(typeof window !== 'undefined' ? window : globalThis);

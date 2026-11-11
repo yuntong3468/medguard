@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: medguard
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: MG_USERS
+        value: demo:medguard2026
+      - key: MG_SECRET
+        generateValue: true
+      - key: NODE_VERSION
+        value: "20"

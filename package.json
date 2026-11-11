@@ -1,0 +1,13 @@
+{
+  "name": "medguard",
+  "version": "3.0.0",
+  "private": true,
+  "description": "MedGuard 全科智诊体 —— 辅助诊断 / 个性化治疗 / 健康管理",
+  "main": "server/server.js",
+  "scripts": {
+    "start": "node server/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
