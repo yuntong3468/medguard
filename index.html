@@ -287,6 +287,16 @@
     display:flex;align-items:center;justify-content:center;cursor:pointer;color:#9AA8AE;font-size:13px;
     border-radius:5px;user-select:none}
   .pw .eye:hover{color:#117A8B;background:#F0F6F7}
+  .modcombo{position:relative;flex:1}
+  .modcombo input{width:100%;padding-right:30px}
+  .modcombo .caret{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:#9AA8AE;border-radius:4px;font-size:11px}
+  .modcombo .caret:hover{background:#F0F6F7;color:#117A8B}
+  #cfgModelList{position:absolute;left:0;right:0;top:calc(100% + 4px);background:#fff;border:1px solid #DCE6E9;
+    border-radius:8px;box-shadow:0 10px 24px rgba(11,43,58,.12);max-height:170px;overflow-y:auto;display:none;z-index:20}
+  #cfgModelList .mi{padding:8px 11px;font-size:12px;color:#1B2A31;cursor:pointer}
+  #cfgModelList .mi:hover{background:#F2FAF9;color:#117A8B}
+  .modal button.mini{min-width:74px;flex:0 0 auto;white-space:nowrap}
   .modal{position:fixed;inset:0;background:rgba(11,43,58,.5);display:none;align-items:center;justify-content:center;z-index:80}
   .modal .box{width:430px;background:#fff;border-radius:14px;padding:24px}
   .modal h3{font-size:14px;color:var(--navy);margin-bottom:10px}
@@ -553,12 +563,15 @@
     </div>
 
     <label>模型名</label>
-    <div style="display:flex;gap:8px">
-      <input id="cfgModel" placeholder="deepseek-chat" style="flex:1">
+    <div id="cfgModelWrap" style="display:flex;gap:8px">
+      <div class="modcombo" id="cfgCombo">
+        <input id="cfgModel" placeholder="deepseek-chat">
+        <span class="caret" id="cfgCaret" onclick="toggleModelList(event)">▾</span>
+        <div id="cfgModelList"></div>
+      </div>
       <button class="mini" onclick="fetchModels()">拉取模型</button>
     </div>
-    <select id="cfgModelList" onchange="pickModel(this)"></select>
-    <div style="font-size:10px;color:#9AA8AE;margin-top:4px">点「拉取模型」自动列出可用模型；也可以手动输入服务商文档里的模型 ID。</div>
+    <div style="font-size:10px;color:#9AA8AE;margin-top:4px">点「拉取模型」自动列出可用模型；也可以手动填服务商文档里的模型 ID。</div>
 
     <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
       <button class="mini" onclick="testLLM()">测试连接</button>
@@ -959,13 +972,16 @@ async function fetchModels() {
     var j = await res.json();
     var ids = (j.data || j.models || []).map(function (x) { return x.id || x.name || x; }).filter(Boolean);
     if (!ids.length) throw new Error('empty');
-    var sel = $('cfgModelList');
-    sel.innerHTML = ids.map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('');
-    sel.style.display = 'block';
-    if (!$('cfgModel').value) $('cfgModel').value = ids[0];
-    sel.value = $('cfgModel').value;
+    var list = $('cfgModelList');
+    list.innerHTML = ids.map(function (x) {
+      return '<div class="mi" data-v="' + x + '" onclick="pickModelItem(this)">' + x + '</div>';
+    }).join('');
+    var keep = ($('cfgModel').value || '').trim();
+    $('cfgModel').value = ids.indexOf(keep) >= 0 ? keep : ids[0];
+    list.style.display = 'block';
+
     el.style.color = '#1B7A5A';
-    el.textContent = '✓ 共 ' + ids.length + ' 个模型，可在下方下拉选择';
+    el.textContent = '✓ 共 ' + ids.length + ' 个模型，点 ▾ 选择';
   } catch (e) {
     el.style.color = '#B83A2E';
     el.textContent = '✕ 拉取失败（部分服务商不允许浏览器直接调用），请手动填写模型名';
@@ -1565,16 +1581,35 @@ function togglePw(id, el) {
   else { i.type = 'password'; el.textContent = '👁'; }
 }
 
-function pickModel(sel) {
-  if (!sel || !sel.value) return;
-  $('cfgModel').value = sel.value;
+function toggleModelList(e) {
+  if (e) e.stopPropagation();
+  var list = $('cfgModelList');
+  if (!list) return;
+  if (!list.innerHTML) { toast('请先点「拉取模型」'); return; }
+  list.style.display = (list.style.display === 'block') ? 'none' : 'block';
 }
+
+function pickModelItem(el) {
+  if (!el) return;
+  $('cfgModel').value = el.getAttribute('data-v') || el.textContent;
+  $('cfgModelList').style.display = 'none';
+}
+
+document.addEventListener('click', function (e) {
+  var list = $('cfgModelList');
+  if (!list || list.style.display !== 'block') return;
+  var inCombo = false;
+  try { inCombo = !!(e.target && e.target.closest && e.target.closest('#cfgCombo')); } catch (err) {}
+  if (!inCombo) list.style.display = 'none';
+});
 
 function openCfg() {
   var c = JSON.parse(localStorage.getItem('mg_llm') || 'null');
   if (c) { $('cfgUrl').value = c.url || ''; $('cfgModel').value = c.model || ''; $('cfgKey').value = c.key || ''; }
   var k = $('cfgKey');
   if (k) { k.type = 'password'; }
+  var lm = $('cfgModelList');
+  if (lm) lm.style.display = 'none';
   var eye = document.querySelector('#cfg .pw .eye');
   if (eye) eye.textContent = '👁';
   $('cfg').style.display = 'flex';
