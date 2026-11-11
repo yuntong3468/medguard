@@ -491,7 +491,7 @@
   <div class="ahead">
     <div class="abrand">MedGuard <em>· 病历存档</em></div>
     <div class="anav">
-      <span class="ahint">只在本浏览器保存，不上传服务器</span>
+      <span class="ahint">本机与云端合并显示，刷新不会丢</span>
       <button class="abtn" onclick="closeArchivePage()">← 返回系统</button>
     </div>
   </div>
@@ -1562,12 +1562,36 @@ function doLogin() {
   });
 }
 
-/* 存档：后端优先 */
+
+function arcKey(x) { return (x.name || '') + '|' + (x.age || '') + '|' + (x.dx || ''); }
+function mergeArc(remote, local) {
+  var map = {};
+  (local || []).forEach(function (x) { map[arcKey(x)] = x; });
+  (remote || []).forEach(function (x) {
+    var k = arcKey(x), cur = map[k];
+    if (!cur) { map[k] = x; return; }
+    var ta = new Date(cur.ts || 0).getTime(), tb = new Date(x.ts || 0).getTime();
+    map[k] = tb > ta ? x : cur;
+  });
+  var arr = [];
+  for (var k in map) arr.push(map[k]);
+  arr.sort(function (a, b) { return new Date(b.ts || 0) - new Date(a.ts || 0); });
+  return arr;
+}
+
+/* 存档：本地优先 + 云端合并 */
 function renderArchive() {
+  var local = loadArc();
   if (API_ON && TOKEN) {
-    apiCases().then(function (list) { paintArc(list); }).catch(function () { paintArc(loadArc()); });
+    apiCases().then(function (remote) {
+      var merged = mergeArc(remote, local);
+      writeArc(merged);
+      paintArc(merged);
+    }).catch(function () {
+      paintArc(local);   // 云端不可用也能看到本地记录
+    });
   } else {
-    paintArc(loadArc());
+    paintArc(local);
   }
 }
 
@@ -1635,16 +1659,19 @@ function saveArc() {
   };
 
   if (API_ON && TOKEN) {
+    // 先写本地，保证刷新后一定还在
+    var l3 = loadArc();
+    var dupL = l3.filter(function (a) { return a.name === rec.name && String(a.age) === String(rec.age) && a.dx === rec.dx; })[0];
+    if (dupL) { dupL.status = rec.status; dupL.rev = rec.rev; }
+    else l3.unshift(rec);
+    writeArc(l3);
+
     apiSave(rec).then(function (d) {
-      if (d && d.duplicate) arcTip('已存在完全相同的记录，未重复存档', false);
-      else if (d && d.updated) arcTip('该病例已在档，已更新为「' + status + '」', true);
-      else arcTip('已存档到云端', true);
+      if (d && d.duplicate) arcTip('已存在相同记录，已更新本地', true);
+      else if (d && d.updated) arcTip('已更新为「' + status + '」（本地+云端）', true);
+      else arcTip('已存档（本地+云端）', true);
     }).catch(function () {
-      // 云端失败时退回本地，避免演示中断
-      var l2 = loadArc();
-      l2.unshift(rec); writeArc(l2);
-      arcTip('云端不可用，已存到本地（' + l2.length + ' 份）', false);
-      renderArchive();
+      arcTip('已存到本地（云端暂不可用）', true);
     });
     return;
   }
@@ -1711,8 +1738,9 @@ function toggleArc() {
 
 function clearArchive() {
   if (!confirm('确定清空全部存档？该操作不可恢复。')) return;
+  writeArc([]);
   if (API_ON && TOKEN) {
-    var ids = (window.__arcCache || []).map(function (a) { return a.id; });
+    var ids = (window.__arcCache || []).map(function (a) { return a.id; }).filter(Boolean);
     var seq = Promise.resolve();
     ids.forEach(function (id) {
       seq = seq.then(function () {
