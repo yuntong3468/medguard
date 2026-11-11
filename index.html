@@ -281,6 +281,12 @@
     background:#fff;color:var(--teal);font-size:11.5px;cursor:pointer}
   .ecard .use:hover{background:var(--teal);color:#fff}
   /* modal */
+  .pw{position:relative}
+  .pw input{padding-right:38px}
+  .pw .eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:24px;height:24px;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:#9AA8AE;font-size:13px;
+    border-radius:5px;user-select:none}
+  .pw .eye:hover{color:#117A8B;background:#F0F6F7}
   .modal{position:fixed;inset:0;background:rgba(11,43,58,.5);display:none;align-items:center;justify-content:center;z-index:80}
   .modal .box{width:430px;background:#fff;border-radius:14px;padding:24px}
   .modal h3{font-size:14px;color:var(--navy);margin-bottom:10px}
@@ -299,7 +305,10 @@
     <h1>MedGuard <em>全科智诊体</em></h1>
     <p class="sub">辅助诊断 · 健康管理 · 医疗流程智能化升级<br>第二届全国人工智能应用创新大赛 · AI 医疗赛道</p>
     <input id="u" placeholder="请输入账号" autocomplete="off">
-    <input id="p" type="password" placeholder="请输入密码" autocomplete="off">
+    <div class="pw">
+      <input id="p" type="password" placeholder="请输入密码" autocomplete="off">
+      <span class="eye" onclick="togglePw('p', this)">👁</span>
+    </div>
     <div class="err" id="err"></div>
     <button class="go" onclick="doLogin()">登录并进入</button>
     <button onclick="closeLogin()" style="width:100%;margin-top:9px;padding:10px;background:#fff;border:1px solid var(--line);border-radius:9px;color:#6B7B83;font-size:12.5px;cursor:pointer">返回首页</button>
@@ -401,6 +410,7 @@
       </div>
       <div class="right">
         <span class="pill" id="modePill">本地推理引擎</span>
+        <button class="ghost" onclick="openCfg()">模型设置</button>
         <button class="ghost" onclick="openArchive()">病历存档</button>
         <button class="ghost" onclick="exitApp()">返回首页</button>
         <button class="ghost" onclick="resetAll()">新病例</button>
@@ -525,22 +535,39 @@
 </div>
 
 <div class="modal" id="cfg">
-  <div class="box">
-    <h3>接入大模型（可选）</h3>
-    <div style="font-size:11px;color:#6B7B83;line-height:1.7">填写 OpenAI 兼容接口即可启用。大模型只负责口语理解与文字润色，诊断结论始终由本地规则引擎给出。</div>
-    <label>Base URL</label><input id="cfgUrl" placeholder="https://api.deepseek.com/v1">
-    <label>API Key</label><input id="cfgKey" type="password" placeholder="sk-...">
-    <label>模型名</label><input id="cfgModel" placeholder="deepseek-chat">
-    <div class="row"><button onclick="closeCfg()">取消</button><button class="ok" onclick="saveCfg()">保存</button></div>
-  </div>
-</div>
+  <div class="box" style="width:470px">
+    <h3>模型设置（可选）</h3>
+    <div style="font-size:11px;color:#6B7B83;line-height:1.75">
+      支持任意 <b>OpenAI 兼容接口</b>：DeepSeek、通义、Moonshot、本地 Ollama、院内私有部署等。<br>
+      <b>默认为浏览器本地推理</b>，无需填写任何配置即可完整使用。填写后启用你自己的接口，模型只做「口述 → 规范病历摘要」的文字整理；<b>诊断结论始终由本地引擎给出</b>，不参与判定。
+    </div>
 
-<div class="modal" id="arcModal">
-  <div class="box">
-    <div id="arcDetail"></div>
-    <div class="row" style="display:flex;gap:8px;margin-top:18px">
-      <button onclick="closeArc()">关闭</button>
-      <button class="ok" id="arcToggle" onclick="toggleArc()">标记为已治疗</button>
+    <label>接口地址（Base URL）</label>
+    <input id="cfgUrl" placeholder="https://api.deepseek.com/v1">
+    <div style="font-size:10px;color:#9AA8AE;margin-top:4px">本地 Ollama 示例：http://localhost:11434/v1</div>
+
+    <label>API Key</label>
+    <div class="pw">
+      <input id="cfgKey" type="password" placeholder="sk-...（本地 Ollama 可随便填 ollama）">
+      <span class="eye" onclick="togglePw('cfgKey', this)">👁</span>
+    </div>
+
+    <label>模型名</label>
+    <input id="cfgModel" placeholder="deepseek-chat">
+
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
+      <button onclick="testLLM()" style="padding:8px 14px;border:1px solid #DCE6E9;border-radius:8px;background:#fff;color:#117A8B;font-size:12px;cursor:pointer">测试连接</button>
+      <span id="cfgTest" style="font-size:11px;color:#9AA8AE"></span>
+    </div>
+
+    <div style="margin-top:14px;background:#F7FAFB;border-radius:8px;padding:9px 11px;font-size:10.5px;color:#6B7B83;line-height:1.7">
+      密钥只保存在<b>本浏览器</b>，不会上传到我们的服务器。共用电脑请用完清除。
+    </div>
+
+    <div class="row">
+      <button onclick="clearCfg()">停用</button>
+      <button onclick="closeCfg()">取消</button>
+      <button class="ok" onclick="saveCfg()">保存</button>
     </div>
   </div>
 </div>
@@ -615,7 +642,8 @@ function onFile(f) {
   });
 }
 
-function beginCase(text, name) {
+async function beginCase(text, name) {
+  text = await llmNormalize(text);
   CASE = { text: text, prev: null, result: null, msgs: [], name: name, arcName: '', arcStatus: '未治疗', review: null };
   var r = MG.consult(text, null);
   CASE.prev = r.state;
@@ -691,12 +719,13 @@ function reply(r, first) {
   pushAg(html);
 }
 
-function sendMsg() {
+async function sendMsg() {
   var el = $('msg'), t = el.value.trim();
   if (!t) return;
   el.value = '';
   pushMe(t);
-  var r = MG.consult(t, CASE.prev);
+  var t2 = await llmNormalize(t);
+  var r = MG.consult(t2, CASE.prev);
   CASE.prev = r.state;
   CASE.result = r;
   CASE.text = CASE.prev.history ? CASE.prev.history.join(' ') : CASE.text;
@@ -797,6 +826,104 @@ function copyRx() {
   arcTip('处方已复制', true);
 }
 
+
+
+/* ================= 可选：大模型口语理解（失败自动回退，不参与诊断） ================= */
+function llmCfg() {
+  try { return JSON.parse(localStorage.getItem('mg_llm') || 'null'); } catch (e) { return null; }
+}
+
+async function llmNormalize(text) {
+  // ① 用户自带密钥优先（BYOK）
+  var own = llmCfg();
+  if (own && own.url && own.key) {
+    var r0 = await callLLM(own.url, own.key, own.model, text);
+    if (r0 !== null) return text + ' ' + r0;
+    return text;   // 自己配的失败就不再往下试，避免混淆
+  }
+
+  // ② 服务端代理（密钥不出服务器）
+  if (API_ON && TOKEN) {
+    try {
+      var pc = new AbortController();
+      var ptm = setTimeout(function () { pc.abort(); }, 15000);
+      var pr = await fetch('/api/llm/chat', {
+        method: 'POST', signal: pc.signal,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: '你是病历文本整理器。把用户口述整理成一句规范中文病历摘要，保留：年龄、性别、主要症状、病程、伴随症状、既往史、用药、血压体温等数值。只输出这一句话，不要解释、不要加诊断。' },
+            { role: 'user', content: text }
+          ]
+        })
+      });
+      clearTimeout(ptm);
+      if (pr.ok) {
+        var pj = await pr.json();
+        if (pj && pj.content) return text + ' ' + pj.content;
+      } else if (pr.status !== 503) {
+        /* 代理报错（非未配置）就走浏览器直连兜底 */
+      } else {
+        return text;
+      }
+    } catch (e) { /* 落到直连 */ }
+  }
+
+  return text;
+}
+
+/* 调一次模型，成功返回文本，失败返回 null */
+async function callLLM(url, key, model, text) {
+  var ctl = new AbortController();
+  var tm = setTimeout(function () { ctl.abort(); }, 10000);
+  try {
+    var res = await fetch(url.replace(/\/$/, '') + '/chat/completions', {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+      body: JSON.stringify({
+        model: model || 'deepseek-chat',
+        temperature: 0,
+        max_tokens: 220,
+        messages: [
+          { role: 'system', content: '你是病历文本整理器。把用户口述整理成一句规范中文病历摘要，保留：年龄、性别、主要症状、病程、伴随症状、既往史、用药、血压体温等数值。只输出这一句话，不要解释、不要加诊断。' },
+          { role: 'user', content: text }
+        ]
+      })
+    });
+    clearTimeout(tm);
+    if (!res.ok) return null;
+    var j = await res.json();
+    var out = ((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
+    return out || null;
+  } catch (e) {
+    clearTimeout(tm);
+    return null;
+  }
+}
+
+/* 测试连接 */
+async function testLLM() {
+  var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim(), model = $('cfgModel').value.trim();
+  var el = $('cfgTest');
+  if (!url || !key) { el.style.color = '#B83A2E'; el.textContent = '请先填接口地址和 Key'; return; }
+  el.style.color = '#6B7B83';
+  el.textContent = '测试中…';
+  var out = await callLLM(url, key, model, '男 58 岁，胸痛 2 小时。');
+  if (out) {
+    el.style.color = '#1B7A5A';
+    el.textContent = '✓ 连接成功：' + out.slice(0, 24) + '…';
+  } else {
+    el.style.color = '#B83A2E';
+    el.textContent = '✕ 连接失败：检查地址、Key、模型名或跨域设置';
+  }
+}
+
+function clearCfg() {
+  localStorage.removeItem('mg_llm');
+  $('modePill').textContent = '本地推理引擎';
+  $('cfgTest').textContent = '';
+  closeCfg();
+}
 
 /* ================= 人工复核（强制流程） ================= */
 function renderReview() {
@@ -974,7 +1101,7 @@ function toast(msg) {
     t.style.cssText = 'position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:#0B2B3A;color:#fff;' +
       'font-size:12px;padding:8px 16px;border-radius:20px;z-index:200;box-shadow:0 6px 18px rgba(11,43,58,.25)';
     document.body.appendChild(t);
-    setTimeout(function () { t.remove(); }, 1800);
+    setTimeout(function () { try { if (t.remove) t.remove(); else if (t.parentNode) t.parentNode.removeChild(t); } catch (e) {} }, 1800);
   } catch (e) {}
 }
 
@@ -1317,9 +1444,21 @@ document.addEventListener('dragover', function (e) { e.preventDefault(); });
 document.addEventListener('drop', function (e) { e.preventDefault(); });
 
 /* 大模型配置 */
+
+function togglePw(id, el) {
+  var i = $(id);
+  if (!i) return;
+  if (i.type === 'password') { i.type = 'text'; el.textContent = '🙈'; }
+  else { i.type = 'password'; el.textContent = '👁'; }
+}
+
 function openCfg() {
   var c = JSON.parse(localStorage.getItem('mg_llm') || 'null');
   if (c) { $('cfgUrl').value = c.url || ''; $('cfgModel').value = c.model || ''; $('cfgKey').value = c.key || ''; }
+  var k = $('cfgKey');
+  if (k) { k.type = 'password'; }
+  var eye = document.querySelector('#cfg .pw .eye');
+  if (eye) eye.textContent = '👁';
   $('cfg').style.display = 'flex';
 }
 function closeCfg() { $('cfg').style.display = 'none'; }
@@ -1327,8 +1466,9 @@ function saveCfg() {
   var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim(), model = $('cfgModel').value.trim();
   if (!url || !key) { localStorage.removeItem('mg_llm'); $('modePill').textContent = '本地推理引擎'; closeCfg(); return; }
   localStorage.setItem('mg_llm', JSON.stringify({ url: url, key: key, model: model || 'deepseek-chat' }));
-  $('modePill').textContent = '本地引擎 + 大模型';
+  $('modePill').textContent = '本地引擎 + 自有模型';
   closeCfg();
+  toast('已启用自有模型接口');
 }
 
 buildExamples();
