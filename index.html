@@ -200,6 +200,31 @@
   .acts button:hover{border-color:var(--teal);color:var(--teal)}
   .acts button.pri{background:var(--teal);border-color:var(--teal);color:#fff}
   .acts button.pri:hover{background:#0d6474;color:#fff}
+  /* ---------- review ---------- */
+  #review{position:fixed;inset:0;background:rgba(11,43,58,.45);display:none;align-items:flex-start;justify-content:center;z-index:90;overflow-y:auto;padding:32px 16px}
+  #review .rbox{width:820px;background:#fff;border-radius:14px;overflow:hidden;margin:auto}
+  #review .rh{display:flex;align-items:center;gap:10px;padding:15px 20px;border-bottom:1px solid var(--line);background:#FAFCFC}
+  #review .rh h2{font-size:15px;color:var(--navy);font-weight:700}
+  #review .rh .sub{font-size:11px;color:var(--lgrey)}
+  #review .rh .x{margin-left:auto;font-size:18px;color:var(--lgrey);cursor:pointer;line-height:1}
+  #review .rb{padding:18px 20px 22px;max-height:calc(100vh - 200px);overflow-y:auto}
+  .rsec{border:1px solid #EDF2F3;border-radius:10px;padding:13px 14px;margin-bottom:13px;background:#FCFDFD}
+  .rsec h4{font-size:11px;color:var(--grey);letter-spacing:.5px;margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .rsec h4::before{content:"";width:3px;height:10px;background:var(--mint);border-radius:2px}
+  .rsec h4 .ai{margin-left:auto;font-size:9.5px;color:var(--lgrey);font-weight:400}
+  .rrow{display:flex;align-items:center;gap:8px;font-size:12px;line-height:1.9;margin-bottom:4px}
+  .rrow label{display:flex;align-items:center;gap:5px;cursor:pointer}
+  .rrow .v{color:var(--ink);font-weight:600}
+  .rsel{padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:11.5px;font-family:inherit;background:#fff}
+  .rin{width:120px;padding:6px 9px;border:1px solid var(--line);border-radius:7px;font-size:11.5px;font-family:inherit}
+  .rta{width:100%;height:64px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;font-size:11.5px;font-family:inherit;resize:none;line-height:1.6}
+  .rxf{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;line-height:1.6;padding:5px 0;border-bottom:1px dashed #EEF2F3}
+  .rxf:last-child{border-bottom:none}
+  .rfoot{display:flex;align-items:center;gap:10px;padding:14px 20px;border-top:1px solid var(--line);background:#FAFCFC}
+  .rfoot .note{font-size:10.5px;color:var(--lgrey);flex:1;line-height:1.6}
+  .badge-rv{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:20px;margin-left:8px}
+  .badge-rv.ok{background:#E9F7F1;color:#1B7A5A}
+  .badge-rv.no{background:#FFF3E0;color:#B36B00}
   /* ---------- archive page ---------- */
   #arcpage{position:fixed;inset:0;background:var(--bg);z-index:60;display:none;overflow-y:auto}
   .ahead{height:62px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;padding:0 40px;position:sticky;top:0;z-index:10}
@@ -498,6 +523,65 @@
   </div>
 </div>
 
+<div id="review">
+  <div class="rbox">
+    <div class="rh">
+      <h2>人工复核</h2>
+      <span class="sub">AI 结论需医师逐项确认后才可定稿</span>
+      <span class="x" onclick="closeReview()">×</span>
+    </div>
+    <div class="rb">
+      <div class="rsec">
+        <h4>AI 生成结论<span class="ai">以下为系统建议，非最终结论</span></h4>
+        <div id="rvSummary"></div>
+      </div>
+
+      <div class="rsec">
+        <h4>① 诊断复核</h4>
+        <div class="rrow">
+          <label><input type="radio" name="rvdx" value="accept" checked onchange="rvSync()"> 采纳首要鉴别</label>
+          <label><input type="radio" name="rvdx" value="change" onchange="rvSync()"> 修改为</label>
+          <select id="rvDxSel" class="rsel" disabled onchange="rvSync()"></select>
+        </div>
+        <div class="rrow" style="margin-top:4px">
+          <span style="color:#6B7B83;font-size:11px">当前复核结果：</span><span class="v" id="rvDxOut">—</span>
+        </div>
+      </div>
+
+      <div class="rsec">
+        <h4>② 分诊复核</h4>
+        <div class="rrow">
+          <label><input type="radio" name="rvtri" value="accept" checked onchange="rvSync()"> 维持 AI 分诊</label>
+          <label><input type="radio" name="rvtri" value="change" onchange="rvSync()"> 调整为</label>
+          <select id="rvTriSel" class="rsel" disabled onchange="rvSync()">
+            <option>急诊</option><option>24 小时内</option><option>门诊</option><option>门诊/观察</option>
+          </select>
+          <input id="rvDept" class="rin" placeholder="科室" oninput="rvSync()">
+        </div>
+        <div class="rrow" style="margin-top:4px">
+          <span style="color:#6B7B83;font-size:11px">当前复核结果：</span><span class="v" id="rvTriOut">—</span>
+        </div>
+      </div>
+
+      <div class="rsec">
+        <h4>③ 处方复核<span class="ai">取消勾选 = 不采用该药</span></h4>
+        <div id="rvRx"></div>
+      </div>
+
+      <div class="rsec">
+        <h4>④ 复核意见</h4>
+        <textarea id="rvNote" class="rta" placeholder="例如：同意诊断，建议加做床旁超声；阿司匹林已确认无出血禁忌。"></textarea>
+      </div>
+    </div>
+    <div class="rfoot">
+      <span class="note">复核人须为执业医师；确认后将写入病历与存档。</span>
+      <input id="rvBy" class="rin" style="width:110px" placeholder="复核医师姓名">
+      <button class="btn-ghost" onclick="closeReview()">取消</button>
+      <button class="btn-main" style="padding:9px 18px" onclick="applyReview()">确认复核并签字</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="arcModal">
   <div class="box">
     <div id="arcDetail"></div>
@@ -759,6 +843,124 @@ function copyRx() {
   arcTip('处方已复制', true);
 }
 
+
+/* ================= 人工复核 ================= */
+function openReview() {
+  var r = CASE.result;
+  if (!r) return;
+  var top = r.differential[0] || {};
+  var t = r.triage;
+
+  // 摘要
+  $('rvSummary').innerHTML =
+    '<div class="rrow"><span style="color:#6B7B83">患者</span><span class="v">' +
+      ((r.vitals && r.vitals.age) ? r.vitals.age + '岁' : '—') + (r.vitals && r.vitals.sex ? ' · ' + r.vitals.sex : '') +
+      '　症状：' + (r.symptoms.join('、') || '—') + '</span></div>' +
+    '<div class="rrow"><span style="color:#6B7B83">AI 诊断</span><span class="v">' + (top.name || '—') + '（' + (top.score || 0) + '）</span></div>' +
+    '<div class="rrow"><span style="color:#6B7B83">AI 分诊</span><span class="v">' + t.level + (r.dept ? ' · ' + r.dept : '') + '</span></div>' +
+    '<div class="rrow"><span style="color:#6B7B83">红旗</span><span class="v">' + (r.redflags.length ? r.redflags.map(function (x) { return x.name; }).join('、') : '无') + '</span></div>';
+
+  // 诊断下拉
+  $('rvDxSel').innerHTML = r.differential.map(function (d) {
+    return '<option value="' + esc(d.name) + '">' + esc(d.name) + '（' + d.score + '）</option>';
+  }).join('') + '<option value="__other__">其他（见复核意见）</option>';
+
+  // 分诊
+  $('rvTriSel').value = t.level;
+  $('rvDept').value = r.dept || '';
+
+  // 处方勾选
+  $('rvRx').innerHTML = (r.rx && r.rx.length)
+    ? r.rx.map(function (x, i) {
+        return '<label class="rxf"><input type="checkbox" data-i="' + i + '" checked>' +
+          '<span><b>' + esc(x.d) + '</b> ' + esc(x.s) + '　' + esc(x.u) + '　疗程：' + esc(x.c) +
+          '<br><span style="color:#9AA8AE;font-size:10.5px">' + esc(x.n) + '</span></span></label>';
+      }).join('')
+    : '<div style="font-size:11.5px;color:#9AA8AE">本例无西药处方</div>';
+
+  // 若已复核，回填
+  if (CASE.review) {
+    $('rvBy').value = CASE.review.by || '';
+    $('rvNote').value = CASE.review.note || '';
+  }
+  $('rvBy').style.borderColor = '#DCE6E9';
+  $('review').style.display = 'flex';
+  rvSync();
+}
+
+function closeReview() { $('review').style.display = 'none'; }
+
+function rvSync() {
+  var r = CASE.result; if (!r) return;
+  var dxMode = document.querySelector('input[name=rvdx]:checked').value;
+  $('rvDxSel').disabled = dxMode !== 'change';
+  $('rvDxOut').textContent = dxMode === 'accept'
+    ? ((r.differential[0] || {}).name || '—')
+    : ($('rvDxSel').value === '__other__' ? '其他（见意见）' : $('rvDxSel').value);
+
+  var triMode = document.querySelector('input[name=rvtri]:checked').value;
+  $('rvTriSel').disabled = triMode !== 'change';
+  $('rvTriOut').textContent = triMode === 'accept'
+    ? (r.triage.level + (r.dept ? ' · ' + r.dept : ''))
+    : ($('rvTriSel').value + ($('rvDept').value ? ' · ' + $('rvDept').value : ''));
+}
+
+function applyReview() {
+  var r = CASE.result; if (!r) return;
+  var by = ($('rvBy').value || '').trim();
+  if (!by) {
+    $('rvBy').style.borderColor = '#B83A2E';
+    $('rvBy').focus();
+    return;
+  }
+  $('rvBy').style.borderColor = '#DCE6E9';
+
+  var dxMode = document.querySelector('input[name=rvdx]:checked').value;
+  var dx = dxMode === 'accept' ? ((r.differential[0] || {}).name || '') : $('rvDxSel').value;
+  if (dx === '__other__') dx = '其他（见复核意见）';
+
+  var triMode = document.querySelector('input[name=rvtri]:checked').value;
+  var tri = triMode === 'accept' ? r.triage.level : $('rvTriSel').value;
+  var dept = triMode === 'accept' ? (r.dept || '') : ($('rvDept').value || '');
+
+  var keep = [];
+  document.querySelectorAll('#rvRx input[type=checkbox]').forEach(function (cb) {
+    if (cb.checked) keep.push(parseInt(cb.getAttribute('data-i'), 10));
+  });
+
+  var changed = (dxMode !== 'accept') || (triMode !== 'accept') || (keep.length !== (r.rx || []).length);
+
+  CASE.review = {
+    by: by,
+    at: new Date().toISOString(),
+    dx: dx,
+    triage: tri,
+    dept: dept,
+    rxKept: keep,
+    note: ($('rvNote').value || '').trim(),
+    changed: changed,
+    aiDx: (r.differential[0] || {}).name || '',
+    aiTriage: r.triage.level
+  };
+
+  closeReview();
+  CASE.__renderedFor = null;   // 强制重绘，让「已复核」徽标出现
+  renderReport();
+  // 若已存档，同步更新该条
+  syncReviewToArchive();
+}
+
+function reviewBadge() {
+  if (!CASE.review) return '<span class="badge-rv no">未复核</span>';
+  return '<span class="badge-rv ok">已复核 · ' + esc(CASE.review.by) + '</span>';
+}
+
+function syncReviewToArchive() {
+  if (!CASE.review || !CASE.result) return;
+  var rec = (window.__arcCache || []).filter(function (a) { return a.rev && a.rev.at === CASE.review.at; })[0];
+  // 存档更新延后到下一次保存时带上即可，这里不强行匹配
+}
+
 function switchTx(mode) {
   var w = $('txWest'), t = $('txTcm');
   if (!w || !t) return;
@@ -781,7 +983,7 @@ function renderReport() {
 
   h += '<div class="banner" style="background:' + t.color + '0F;border:1px solid ' + t.color + '33">' +
     '<span class="badge" style="background:' + t.color + ';color:#fff">' + t.level + '</span>' +
-    '<div class="txt"><b>分诊依据：</b>' + esc(t.reason) +
+    '<div class="txt"><b>分诊依据：</b>' + esc(t.reason) + reviewBadge() +
     (r.redflags.length ? '<br><b style="color:#B83A2E">红旗：' + r.redflags.map(function (x) { return x.name; }).join('；') + '</b><br>' +
       r.redflags.map(function (x) { return '· ' + x.action; }).join('<br>') : '') + '</div></div>';
 
@@ -940,6 +1142,7 @@ function renderReport() {
   h += '<div class="acts">' +
     '<button class="pri" onclick="genRecord()">生成门诊病历</button>' +
     '<button onclick="genReferral()">生成转诊单</button>' +
+    '<button onclick="openReview()">人工复核</button>' +
     '<button onclick="copyAll()">复制结构化结果</button>' +
     '<button onclick="show(\'agent\')">返回追问</button></div>';
 
@@ -980,7 +1183,9 @@ function genRecord() {
     '处置去向：' + r.triage.level + '（' + r.triage.reason + '）\n' +
     '随访：' + top.fu +
     (rxLines ? '\n\n处方：\n' + rxLines : '') +
-    '\n\n医师签名：________　　日期：' + new Date().toLocaleDateString('zh-CN');
+    '\n\n医师签名：________　　日期：' + new Date().toLocaleDateString('zh-CN') +
+    (CASE.review ? '\n复核医师：' + CASE.review.by + '　' + new Date(CASE.review.at).toLocaleString('zh-CN') +
+      (CASE.review.note ? '\n复核意见：' + CASE.review.note : '') : '\n复核：未经复核');
   showOut('门诊病历', txt);
 }
 
@@ -1175,6 +1380,7 @@ function saveArc() {
     status: status,
     triage: t.level,
     dept: r.dept || (top.dept || ''),
+    rev: CASE.review || null,
     ts: new Date().toISOString(),
     v: {
       symptoms: (r.symptoms || []).slice(0, 8),
@@ -1412,6 +1618,7 @@ function saveArc() {
     status: status,
     triage: t.level,
     dept: r.dept || (top.dept || ''),
+    rev: CASE.review || null,
     ts: new Date().toISOString(),
     v: {
       symptoms: (r.symptoms || []).slice(0, 8),
