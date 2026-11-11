@@ -671,7 +671,7 @@ function onFile(f) {
 }
 
 async function beginCase(text, name) {
-  text = await llmNormalize(text);
+  // 不再等模型：本地引擎立即出结果，模型只影响对话措辞
   CASE = { text: text, prev: null, result: null, msgs: [], name: name, arcName: '', arcStatus: '未治疗', review: null };
   var r = MG.consult(text, null);
   CASE.prev = r.state;
@@ -764,9 +764,12 @@ function replyLocal(r, first, modelText) {
       html += '<br><span style="color:#8A5A12">如果这几项不好回答，可以直接说：哪里最难受、从什么时候开始、有没有发烧 / 血压多少。</span>';
     }
     CASE.__lastQ = sig;
-  } else {
+  } else if (r.sufficient) {
     CASE.__lastQ = '';
     html += '<br><br>信息已足够，可以生成分析报告了。';
+  } else {
+    CASE.__lastQ = '';
+    html += '<br><br>信息有限，可以先生成报告（结论会标注需复核），也可以继续补充病史。';
   }
 
   if (r.warnings && r.warnings.length) {
@@ -786,8 +789,7 @@ async function sendMsg() {
   if (!t) return;
   el.value = '';
   pushMe(t);
-  var t2 = await llmNormalize(t);
-  var r = MG.consult(t2, CASE.prev);
+  var r = MG.consult(t, CASE.prev);
   CASE.prev = r.state;
   CASE.result = r;
   CASE.text = CASE.prev.history ? CASE.prev.history.join(' ') : CASE.text;
@@ -837,10 +839,15 @@ function kv(k, v) {
 }
 
 function updateReady(r) {
-  if (r && r.sufficient && r.differential.length) {
+  // 只要有分析结果就给入口，不再因为「信息不足」把按钮藏起来
+  if (r && r.differential && r.differential.length) {
     $('readyBox').style.display = 'flex';
-    $('readyTx').innerHTML = '已获得足够信息：共 ' + r.symptoms.length + ' 个症状，' +
-      '首要鉴别为「' + r.differential[0].name + '」，分诊建议「' + r.triage.level + '」。';
+    if (r.sufficient) {
+      $('readyTx').innerHTML = '已获得足够信息：共 ' + r.symptoms.length + ' 个症状，' +
+        '首要鉴别为「' + r.differential[0].name + '」，分诊建议「' + r.triage.level + '」。';
+    } else {
+      $('readyTx').innerHTML = '目前 ' + r.symptoms.length + ' 个症状，信息有限——可以先出报告（结论会标注需人工复核），也可以继续补充病史。';
+    }
   } else {
     $('readyBox').style.display = 'none';
   }
@@ -1017,10 +1024,22 @@ async function testLLM() {
 }
 
 function clearCfg() {
-  localStorage.removeItem('mg_llm');
+  // 清掉本机保存的接口信息
+  try { localStorage.removeItem('mg_llm'); } catch (e) {}
+  // 清空界面上所有与接口相关的内容
+  ['cfgUrl', 'cfgKey', 'cfgModel'].forEach(function (id) {
+    var el = $(id);
+    if (el) { el.value = ''; if (id === 'cfgKey') el.type = 'password'; }
+  });
+  var list = $('cfgModelList');
+  if (list) { list.innerHTML = ''; list.style.display = 'none'; }
+  var eye = document.querySelector('#cfg .pw .eye');
+  if (eye) eye.textContent = '👁';
+  var tip = $('cfgTest');
+  if (tip) { tip.textContent = ''; tip.style.color = '#9AA8AE'; }
   $('modePill').textContent = '本地推理引擎';
-  $('cfgTest').textContent = '';
   closeCfg();
+  toast('已清除本机保存的接口地址与密钥');
 }
 
 
@@ -1614,8 +1633,17 @@ document.addEventListener('click', function (e) {
 });
 
 function openCfg() {
-  var c = JSON.parse(localStorage.getItem('mg_llm') || 'null');
-  if (c) { $('cfgUrl').value = c.url || ''; $('cfgModel').value = c.model || ''; $('cfgKey').value = c.key || ''; }
+  var c = null;
+  try { c = JSON.parse(localStorage.getItem('mg_llm') || 'null'); } catch (e) { c = null; }
+  if (c) {
+    $('cfgUrl').value = c.url || '';
+    $('cfgModel').value = c.model || '';
+    $('cfgKey').value = c.key || '';
+  } else {
+    $('cfgUrl').value = '';
+    $('cfgModel').value = '';
+    $('cfgKey').value = '';
+  }
   var k = $('cfgKey');
   if (k) { k.type = 'password'; }
   var lm = $('cfgModelList');

@@ -436,7 +436,20 @@ const RAW = [
     if (!state.vitals.temp && !state.vitals.sbp) {
       asks.push({ type: 'vital', text: '方便的话，告诉我体温和血压（例如 T37.2℃、BP140/90mmHg）。' });
     }
-    return asks.slice(0, 2);
+    const asked = state.asked || [];
+    var fresh = asks.filter(function (a) { return asked.indexOf(a.text) < 0; });
+    if (!fresh.length) {
+      var generics = [
+        '可以直接补充：最难受的地方、持续多久、有没有发烧或测过血压。',
+        '还可以补充：既往病史、正在吃的药、有没有药物过敏。'
+      ];
+      var g = null;
+      for (var gi = 0; gi < generics.length; gi++) {
+        if (asked.indexOf(generics[gi]) < 0) { g = generics[gi]; break; }
+      }
+      fresh = g ? [{ type: 'generic', text: g }] : [];
+    }
+    return fresh.slice(0, 2);
   }
 
   /* ---------------- 9b. 个体化治疗 ---------------- */
@@ -816,8 +829,9 @@ const RAW = [
     };
 
     const enough = pos.length >= 2 && (vitals.duration || pos.length >= 3) && top && top.score >= 30;
-    const askList = enough ? [] : nextQuestions({ ...state2, vitals: vitals });
+    const askList = enough ? [] : nextQuestions({ ...state2, vitals: vitals, asked: (state.asked || []) });
     state2.asks = askList;
+    state2.asked = (state.asked || []).concat(askList.map(function (a) { return a.text; })).slice(-12);
 
     return {
       input: text,
