@@ -839,17 +839,23 @@ function kv(k, v) {
 }
 
 function updateReady(r) {
-  // 只要有分析结果就给入口，不再因为「信息不足」把按钮藏起来
-  if (r && r.differential && r.differential.length) {
-    $('readyBox').style.display = 'flex';
-    if (r.sufficient) {
-      $('readyTx').innerHTML = '已获得足够信息：共 ' + r.symptoms.length + ' 个症状，' +
-        '首要鉴别为「' + r.differential[0].name + '」，分诊建议「' + r.triage.level + '」。';
-    } else {
-      $('readyTx').innerHTML = '目前 ' + r.symptoms.length + ' 个症状，信息有限——可以先出报告（结论会标注需人工复核），也可以继续补充病史。';
-    }
-  } else {
+  if (!r || !r.differential || !r.differential.length) {
     $('readyBox').style.display = 'none';
+    return;
+  }
+
+  // 对话刚开始（只有一句主诉）先不给出口，等至少一轮追问后再出现
+  var userTurns = (CASE.msgs || []).filter(function (m) { return m.role === 'me'; }).length;
+  var canReport = r.sufficient || userTurns >= 2;
+
+  if (!canReport) { $('readyBox').style.display = 'none'; return; }
+
+  $('readyBox').style.display = 'flex';
+  if (r.sufficient) {
+    $('readyTx').innerHTML = '已获得足够信息：共 ' + r.symptoms.length + ' 个症状，' +
+      '首要鉴别为「' + r.differential[0].name + '」，分诊建议「' + r.triage.level + '」。';
+  } else {
+    $('readyTx').innerHTML = '目前 ' + r.symptoms.length + ' 个症状，信息有限——可以先出报告（结论会标注需人工复核），也可以继续补充病史。';
   }
 }
 
