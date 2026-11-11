@@ -554,14 +554,14 @@
 
     <label>模型名</label>
     <div style="display:flex;gap:8px">
-      <input id="cfgModel" list="cfgModels" placeholder="deepseek-chat" style="flex:1">
-      <button onclick="fetchModels()" style="padding:0 12px;border:1px solid #DCE6E9;border-radius:8px;background:#fff;color:#117A8B;font-size:11.5px;cursor:pointer;white-space:nowrap">拉取模型</button>
+      <input id="cfgModel" placeholder="deepseek-chat" style="flex:1">
+      <button class="mini" onclick="fetchModels()">拉取模型</button>
     </div>
-    <datalist id="cfgModels"></datalist>
-    <div style="font-size:10px;color:#9AA8AE;margin-top:4px">不知道写什么就点「拉取模型」；也可以在服务商控制台的模型列表里复制。</div>
+    <select id="cfgModelList" onchange="pickModel(this)"></select>
+    <div style="font-size:10px;color:#9AA8AE;margin-top:4px">点「拉取模型」自动列出可用模型；也可以手动输入服务商文档里的模型 ID。</div>
 
     <div style="margin-top:12px;display:flex;align-items:center;gap:10px">
-      <button onclick="testLLM()" style="padding:8px 14px;border:1px solid #DCE6E9;border-radius:8px;background:#fff;color:#117A8B;font-size:12px;cursor:pointer">测试连接</button>
+      <button class="mini" onclick="testLLM()">测试连接</button>
       <span id="cfgTest" style="font-size:11px;color:#9AA8AE"></span>
     </div>
 
@@ -959,10 +959,13 @@ async function fetchModels() {
     var j = await res.json();
     var ids = (j.data || j.models || []).map(function (x) { return x.id || x.name || x; }).filter(Boolean);
     if (!ids.length) throw new Error('empty');
-    $('cfgModels').innerHTML = ids.map(function (x) { return '<option value="' + x + '"></option>'; }).join('');
+    var sel = $('cfgModelList');
+    sel.innerHTML = ids.map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('');
+    sel.style.display = 'block';
     if (!$('cfgModel').value) $('cfgModel').value = ids[0];
+    sel.value = $('cfgModel').value;
     el.style.color = '#1B7A5A';
-    el.textContent = '✓ 共 ' + ids.length + ' 个模型，可点输入框选择';
+    el.textContent = '✓ 共 ' + ids.length + ' 个模型，可在下方下拉选择';
   } catch (e) {
     el.style.color = '#B83A2E';
     el.textContent = '✕ 拉取失败（部分服务商不允许浏览器直接调用），请手动填写模型名';
@@ -971,7 +974,8 @@ async function fetchModels() {
 
 /* 测试连接 */
 async function testLLM() {
-  var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim(), model = $('cfgModel').value.trim();
+  var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+  var model = ($('cfgModel').value || '').trim() || (($('cfgModelList') || {}).value || '').trim();
   var el = $('cfgTest');
   if (!url || !key) { el.style.color = '#B83A2E'; el.textContent = '请先填接口地址和 Key'; return; }
   el.style.color = '#6B7B83';
@@ -1561,6 +1565,11 @@ function togglePw(id, el) {
   else { i.type = 'password'; el.textContent = '👁'; }
 }
 
+function pickModel(sel) {
+  if (!sel || !sel.value) return;
+  $('cfgModel').value = sel.value;
+}
+
 function openCfg() {
   var c = JSON.parse(localStorage.getItem('mg_llm') || 'null');
   if (c) { $('cfgUrl').value = c.url || ''; $('cfgModel').value = c.model || ''; $('cfgKey').value = c.key || ''; }
@@ -1572,7 +1581,8 @@ function openCfg() {
 }
 function closeCfg() { $('cfg').style.display = 'none'; }
 function saveCfg() {
-  var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim(), model = $('cfgModel').value.trim();
+  var url = $('cfgUrl').value.trim(), key = $('cfgKey').value.trim();
+  var model = ($('cfgModel').value || '').trim() || (($('cfgModelList') || {}).value || '').trim();
   if (!url || !key) { localStorage.removeItem('mg_llm'); $('modePill').textContent = '本地推理引擎'; closeCfg(); return; }
   localStorage.setItem('mg_llm', JSON.stringify({ url: url, key: key, model: model || 'deepseek-chat' }));
   $('modePill').textContent = '本地引擎 + 自有模型';
