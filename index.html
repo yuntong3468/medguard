@@ -590,6 +590,16 @@
   </div>
 </div>
 
+<div class="modal" id="arcModal">
+  <div class="box">
+    <div id="arcDetail"></div>
+    <div style="display:flex;gap:8px;margin-top:18px">
+      <button onclick="closeArc()">关闭</button>
+      <button class="ok" id="arcToggle" onclick="toggleArc()">标记为已治疗</button>
+    </div>
+  </div>
+</div>
+
 <script src="fileio.js"></script>
 <script src="engine.js"></script>
 <script>
@@ -2013,6 +2023,10 @@ function openArc(id) {
     (x.age ? x.age + '岁' : '') + (x.sex ? ' · ' + x.sex : '') + '　' + new Date(x.ts).toLocaleString('zh-CN') + '</span></h3>';
   h += '<div class="kv"><b>疾病</b><span>' + esc(x.dx) + '　（分诊：' + esc(x.triage || '-') + (x.dept ? ' · ' + esc(x.dept) : '') + '）</span></div>';
   h += '<div class="kv"><b>状态</b><span>' + x.status + '</span></div>';
+  h += '<div class="kv"><b>复核</b><span>' +
+    (x.rev ? ('已复核 · ' + esc(x.rev.by) + '　' + new Date(x.rev.at).toLocaleString('zh-CN') +
+      (x.rev.note ? '<br><span style="color:#6B7B83">意见：' + esc(x.rev.note) + '</span>' : ''))
+      : '<span style="color:#B36B00">未经复核</span>') + '</span></div>';
   h += '<div class="kv"><b>症状</b><span>' + (v.symptoms && v.symptoms.length ? v.symptoms.join('、') : '—') + '</span></div>';
   if (v.risks && v.risks.length) h += '<div class="kv"><b>危险因素</b><span>' + v.risks.join('、') + '</span></div>';
   h += '<div class="kv"><b>生命体征</b><span>' + ([vt.temp ? 'T ' + vt.temp + '℃' : '', vt.sbp ? 'BP ' + vt.sbp + '/' + vt.dbp : '',
